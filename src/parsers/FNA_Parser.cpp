@@ -26,12 +26,12 @@ namespace gene_hmm {
         return total_length;
     }
 
-    vector<ChromosomeRange> FNA_Parser::get_chromosome_ranges(const string& fasta_path) {
+    vector<Chromosome_Range> FNA_Parser::get_chromosome_ranges(const string& fasta_path) {
         ifstream file(fasta_path);
         if (!file.is_open()) {
             throw runtime_error("Unable to open FASTA file: " + fasta_path);
         }
-        vector<ChromosomeRange> ranges;
+        vector<Chromosome_Range> ranges;
         size_t cumulative = 0;
         string line;
         while (getline(file, line)) {
