@@ -26,6 +26,35 @@ namespace gene_hmm {
         return total_length;
     }
 
+    vector<ChromosomeRange> FNA_Parser::get_chromosome_ranges(const string& fasta_path) {
+        ifstream file(fasta_path);
+        if (!file.is_open()) {
+            throw runtime_error("Unable to open FASTA file: " + fasta_path);
+        }
+        vector<ChromosomeRange> ranges;
+        size_t cumulative = 0;
+        string line;
+        while (getline(file, line)) {
+            if (line.empty()) continue;
+            if (line[0] == '>') {
+                //Close the previous range now that we know where it ended
+                if (!ranges.empty()) ranges.back().end = cumulative;
+                size_t end = 1;
+                while (end < line.size() &&
+                       !isspace(static_cast<unsigned char>(line[end]))) {
+                    end++;
+                }
+                ranges.push_back({line.substr(1, end - 1), cumulative, 0});
+                continue;
+            }
+            for (char c : line) {
+                if (c != '\n' && c != '\r') cumulative++;
+            }
+        }
+        if (!ranges.empty()) ranges.back().end = cumulative;
+        return ranges;
+    }
+
     unordered_map<string, size_t> FNA_Parser::get_chromosome_offsets(const string& fasta_path) {
         ifstream file(fasta_path);
         if (!file.is_open()) {
@@ -53,17 +82,17 @@ namespace gene_hmm {
         return offsets;
     }
 
-    vector<Nucleotide> FNA_Parser::parse_sequence(string& file_path) {
-        ifstream file(file_path);
+    vector<Nucleotide> FNA_Parser::parse_sequence(const string& fasta_path) {
+        ifstream file(fasta_path);
         if (!file.is_open()) {
             throw runtime_error("Unable to Open Sequence File");
         }
         vector<Nucleotide> nuc_sequence;
-        string curr_line;
-        while (getline(file, curr_line)) {
-            if (curr_line.empty()) continue;
-            if (curr_line[0] == '>') continue;
-            for (char c : curr_line) {
+        string line;
+        while (getline(file, line)) {
+            if (line.empty()) continue;
+            if (line[0] == '>') continue;
+            for (char c : line) {
                 c = toupper(static_cast<unsigned char>(c));
                 switch (c) {
                     case 'A': nuc_sequence.push_back(Nucleotide::A); break;
@@ -76,7 +105,6 @@ namespace gene_hmm {
                 }
             }
         }
-        file.close();
         return nuc_sequence;
     }
 }
