@@ -10,9 +10,9 @@ namespace gene_hmm {
 
     using namespace std;
 
-    using LogProb = double;
-    const LogProb LOG_INF = numeric_limits<LogProb>::infinity();
-    const LogProb LOG_ZERO = -numeric_limits<LogProb>::infinity();
+    using Log_Prob = double;
+    const Log_Prob LOG_INF = numeric_limits<Log_Prob>::infinity();
+    const Log_Prob LOG_ZERO = -numeric_limits<Log_Prob>::infinity();
 
     enum class Nucleotide: uint8_t{
         A = 1,

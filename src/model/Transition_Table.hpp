@@ -17,7 +17,7 @@ namespace gene_hmm {
         //Log_Prob_Matrix[i][j] = log P(state j | state i)
         using Count_Matrix = array<array<uint64_t, NUM_STATES>, NUM_STATES>;
         using Row_Sum_Vector = array<uint64_t, NUM_STATES>;
-        using Log_Prob_Matrix = array<array<LogProb, NUM_STATES>, NUM_STATES>;
+        using Log_Prob_Matrix = array<array<Log_Prob, NUM_STATES>, NUM_STATES>;
 
         //(1) Count all i -> j transitions
         //(2) Count all outgoing transitions from each state
