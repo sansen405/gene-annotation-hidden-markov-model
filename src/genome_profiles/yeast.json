@@ -3,8 +3,8 @@
     "description": "Saccharomyces cerevisiae S288C (RefSeq GCF_000146045.2 R64)",
 
     "training": {
-        "fasta": "yeast_data/GCF_000146045.2_R64_genomic.fna",
-        "gff":   "yeast_data/genomic.gff",
+        "fasta": "genome_data/yeast_data/GCF_000146045.2_R64_genomic.fna",
+        "gff":   "genome_data/yeast_data/genomic.gff",
         "test_chromosomes":    ["NC_001148.4"],
         "exclude_chromosomes": ["NC_001224.1"]
     },

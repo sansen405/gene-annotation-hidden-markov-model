@@ -11,10 +11,10 @@
 namespace gene_hmm {
     using namespace std;
 
-    struct ExonFragment {
+    struct Exon_Fragment {
         int start;
         int end;
-        bool operator<(const ExonFragment& other) const { return start < other.start; }
+        bool operator<(const Exon_Fragment& other) const { return start < other.start; }
     };
 
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path) {
@@ -34,7 +34,7 @@ namespace gene_hmm {
         vector<string> tokens;
         string t;
 
-        map<string, vector<ExonFragment>> gene_builder;
+        map<string, vector<Exon_Fragment>> gene_builder;
 
         //Group CDS fragments by parent_id, namespaced by chromosome
         while (getline(file, curr_line)) {
