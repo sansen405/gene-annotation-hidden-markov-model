@@ -1,0 +1,34 @@
+{
+    "name": "yeast",
+    "description": "Saccharomyces cerevisiae S288C (RefSeq GCF_000146045.2 R64)",
+
+    "training": {
+        "fasta": "yeast_data/GCF_000146045.2_R64_genomic.fna",
+        "gff":   "yeast_data/genomic.gff",
+        "test_chromosomes":    ["NC_001148.4"],
+        "exclude_chromosomes": ["NC_001224.1"]
+    },
+
+    "filters": {
+        "min_first_cds_bp":     3,
+        "min_last_cds_bp":      3,
+        "min_intron_bp":        20,
+        "require_3n_cds":       true,
+        "include_minus_strand": false
+    },
+
+    "emissions": {
+        "INTERGENIC":  { "type": "markov", "order": 1 },
+        "INTRON":      { "type": "markov", "order": 1 },
+        "EXON_FRAME":  { "type": "markov", "order": 5, "frame_tied": true },
+        "DONOR":       { "type": "pssm", "window_left": 3,  "window_right": 6 },
+        "ACCEPTOR":    { "type": "pssm", "window_left": 15, "window_right": 3 },
+        "START_CODON": { "type": "deterministic" },
+        "STOP_CODON":  { "type": "deterministic" }
+    },
+
+    "smoothing": {
+        "transition_pseudocount": 0.01,
+        "emission_pseudocount":   0.5
+    }
+}
