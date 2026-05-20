@@ -1,4 +1,4 @@
-#include "Sequence_Parser.hpp"
+#include "FNA_Parser.hpp"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -7,7 +7,7 @@
 namespace gene_hmm {
     using namespace std;
 
-    size_t Sequence_Parser::get_sequence_length(const string& fasta_path) {
+    size_t FNA_Parser::get_sequence_length(const string& fasta_path) {
         ifstream file(fasta_path);
         if (!file.is_open()) {
             throw runtime_error("Unable to open FASTA file: " + fasta_path);
@@ -26,7 +26,7 @@ namespace gene_hmm {
         return total_length;
     }
 
-    unordered_map<string, size_t> Sequence_Parser::get_chromosome_offsets(const string& fasta_path) {
+    unordered_map<string, size_t> FNA_Parser::get_chromosome_offsets(const string& fasta_path) {
         ifstream file(fasta_path);
         if (!file.is_open()) {
             throw runtime_error("Unable to open FASTA file: " + fasta_path);
@@ -53,7 +53,7 @@ namespace gene_hmm {
         return offsets;
     }
 
-    vector<Nucleotide> Sequence_Parser::parse_sequence(string& file_path) {
+    vector<Nucleotide> FNA_Parser::parse_sequence(string& file_path) {
         ifstream file(file_path);
         if (!file.is_open()) {
             throw runtime_error("Unable to Open Sequence File");

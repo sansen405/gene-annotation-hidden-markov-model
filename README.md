@@ -2,7 +2,7 @@ src/
 ├── topology/
 │   └── Topology.hpp           // your current Config.hpp, renamed for clarity
 ├── annotation/
-│   ├── Sequence_Parser.{hpp,cpp}   // (existing)
+│   ├── FNA_Parser.{hpp,cpp}   // (existing)
 │   └── GFF_Parser.{hpp,cpp}        // (existing)
 ├── model/
 │   ├── HMM.hpp                // bundle: topology + trans + emissions + lengths

@@ -1,5 +1,5 @@
 #include "GFF_Parser.hpp"
-#include "Sequence_Parser.hpp"
+#include "FNA_Parser.hpp"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -20,8 +20,8 @@ namespace gene_hmm {
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path) {
         //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron}
 
-        size_t sequence_length = Sequence_Parser::get_sequence_length(fna_path);
-        auto chrom_offsets = Sequence_Parser::get_chromosome_offsets(fna_path);
+        size_t sequence_length = FNA_Parser::get_sequence_length(fna_path);
+        auto chrom_offsets = FNA_Parser::get_chromosome_offsets(fna_path);
 
         ifstream file(gff_path);
         if (!file.is_open()) {

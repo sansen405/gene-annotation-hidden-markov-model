@@ -9,7 +9,7 @@ namespace gene_hmm {
 
     using namespace std;
 
-    class Sequence_Parser{
+    class FNA_Parser{
         public:
             static vector<Nucleotide> parse_sequence(string& file_path);
             static size_t get_sequence_length(const string& fasta_path);
