@@ -18,7 +18,7 @@ namespace gene_hmm {
     };
 
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path) {
-        // regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron}
+        //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron}
 
         size_t sequence_length = Sequence_Parser::get_sequence_length(fna_path);
         auto chrom_offsets = Sequence_Parser::get_chromosome_offsets(fna_path);
@@ -36,7 +36,7 @@ namespace gene_hmm {
 
         map<string, vector<ExonFragment>> gene_builder;
 
-        //group fragments by parent_id (namespaced by chromosome)
+        //Group CDS fragments by parent_id, namespaced by chromosome
         while (getline(file, curr_line)) {
             if (curr_line.empty() || curr_line[0] == '#') {
                 continue;
@@ -53,7 +53,7 @@ namespace gene_hmm {
                 continue;
             }
 
-            // Translate per-chromosome GFF coords into the global concatenated vector.
+            //Translate per-chromosome GFF coords into the global concatenated vector
             auto off_it = chrom_offsets.find(tokens[0]);
             if (off_it == chrom_offsets.end()) continue;
             int chrom_off = static_cast<int>(off_it->second);
@@ -76,7 +76,7 @@ namespace gene_hmm {
             }
         }
 
-        //map back to regions
+        //Lay each gene down: CDS fragments as 1, gaps between fragments as 2 (intron)
         for (auto& [parent_id, fragments] : gene_builder) {
             sort(fragments.begin(), fragments.end());
 
@@ -104,11 +104,11 @@ namespace gene_hmm {
 
     vector<State> GFF_Parser::parse_states(vector<int> region_sequence) {
         vector<State> state_sequence(region_sequence.size(), State::INTERGENIC);
-        int frame_counter = 0; //0 -> exon_1, etc.
+        int frame_counter = 0; //Frame of the NEXT exon base: 0 -> EXON_FRAME_1, 1 -> EXON_FRAME_2, 2 -> EXON_FRAME_3
         int active_intron = 0;
         size_t index = 0;
         while(index < region_sequence.size()){
-            //CASE 0: INTERGENIC STATES
+            //Case 0: intergenic
             if(region_sequence[index] == 0){
                 state_sequence[index] = State::INTERGENIC;
                 frame_counter = 0;
@@ -116,10 +116,10 @@ namespace gene_hmm {
                 continue;
             }
 
-            //CASE 1: CDS STATES
+            //Case 1: CDS
             if(region_sequence[index] == 1){
-                //CASE 1A: START CODON
-                if(index == 0 || region_sequence[index-1] == 0){ //INTERGENIC -> START_CODONS
+                //Case 1A: start codon (intergenic -> CDS boundary)
+                if(index == 0 || region_sequence[index-1] == 0){
                     if (index + 2 < region_sequence.size()
                         && region_sequence[index+1] == 1
                         && region_sequence[index+2] == 1) {
@@ -130,15 +130,15 @@ namespace gene_hmm {
                         frame_counter = 0;
                         continue;
                     }
-                    // First CDS fragment is split by an intron (rare); fall through
-                    // and treat this base as a normal exon-frame_1 base.
+                    //First CDS fragment is split by an intron (rare); fall through
+                    //and let this base be handled as a normal exon-frame base below
                 }
 
-                //CASE 1B: END_CODON
+                //Case 1B: stop codon (CDS -> intergenic boundary, or end of sequence)
                 if(index + 2 < region_sequence.size()
                    && region_sequence[index+1] == 1
                    && region_sequence[index+2] == 1
-                   && (index + 3 >= region_sequence.size() || region_sequence[index+3] == 0)){ //CDS -> intergenic (or end)
+                   && (index + 3 >= region_sequence.size() || region_sequence[index+3] == 0)){
                     state_sequence[index] = State::STOP_CODON_1;
                     state_sequence[index+1] = State::STOP_CODON_2;
                     state_sequence[index+2] = State::STOP_CODON_3;
@@ -147,7 +147,7 @@ namespace gene_hmm {
                     continue;
                 }
 
-                //CASE 1: STANDARD CDS EXON READING FRAMES
+                //Case 1C: standard exon reading frames
                 if(frame_counter == 0){
                     state_sequence[index] = State::EXON_FRAME_1;
                 }
@@ -157,35 +157,40 @@ namespace gene_hmm {
                 if(frame_counter == 2){
                     state_sequence[index] = State::EXON_FRAME_3;
                 }
-                
+
                 frame_counter = (frame_counter+1)%3;
                 index++;
                 continue;
             }
 
-            //CASE 2: INTRON STATES
+            //Case 2: intron
             if (region_sequence[index] == 2){
                 bool is_donor = (index == 0 || region_sequence[index-1] == 1);
                 bool is_acceptor = (index + 1 < region_sequence.size() && region_sequence[index+1] == 1);
 
-                //Case 2A: DONOR_1,2,3 states
+                //Case 2A: donor (CDS -> intron boundary)
+                //The donor/intron/acceptor frame mirrors the next-exon frame in frame_counter:
+                //  frame_counter == 0 -> previous exon ended at EXON_FRAME_3 -> use intron pair 1
+                //  frame_counter == 1 -> previous exon stopped mid-codon at EXON_FRAME_1 -> use pair 2
+                //  frame_counter == 2 -> previous exon stopped mid-codon at EXON_FRAME_2 -> use pair 3
                 if(is_donor){
-                    if(frame_counter == 0){//Exon 3 Spun off
+                    if(frame_counter == 0){
                         state_sequence[index] = State::DONOR_1;
-                        active_intron = frame_counter +1;
+                        active_intron = frame_counter + 1;
                     }
-                    if(frame_counter == 1){ // Exon1 Spun oFF
+                    if(frame_counter == 1){
                         state_sequence[index] = State::DONOR_2;
-                        active_intron = frame_counter +1;
+                        active_intron = frame_counter + 1;
                     }
-                    if(frame_counter == 2){// Expon2 Spun off
+                    if(frame_counter == 2){
                         state_sequence[index] = State::DONOR_3;
                         active_intron = frame_counter + 1;
                     }
                     index++;
                     continue;
                 }
-                //Case 2B: Acceptor 1,2,3
+
+                //Case 2B: acceptor (intron -> CDS boundary)
                 if(is_acceptor){
                     if(active_intron == 1){
                         state_sequence[index] = State::ACCEPTOR_1;
@@ -199,13 +204,13 @@ namespace gene_hmm {
                     index++;
                     continue;
                 }
-                //CADE2C: Intron 
+
+                //Case 2C: intron body
                 if(active_intron == 1){
                     state_sequence[index] = State::INTRON_1;
                 }
                 else if(active_intron == 2){
                     state_sequence[index] = State::INTRON_2;
-        
                 }
                 else if(active_intron == 3){
                     state_sequence[index] = State::INTRON_3;
@@ -213,7 +218,6 @@ namespace gene_hmm {
 
                 index++;
             }
-
         }
 
         return state_sequence;

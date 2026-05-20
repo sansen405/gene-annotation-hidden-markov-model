@@ -37,14 +37,12 @@ namespace gene_hmm {
         while (getline(file, line)) {
             if (line.empty()) continue;
             if (line[0] == '>') {
-                // Read first whitespace-delimited token after '>'
                 size_t end = 1;
                 while (end < line.size() &&
                        !isspace(static_cast<unsigned char>(line[end]))) {
                     end++;
                 }
                 string chrom = line.substr(1, end - 1);
-                // Each record begins right where the previous one ended.
                 offsets[chrom] = cumulative;
                 continue;
             }
