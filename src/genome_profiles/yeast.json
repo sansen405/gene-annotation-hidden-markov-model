@@ -28,7 +28,7 @@
     },
 
     "smoothing": {
-        "transition_pseudocount": 0.01,
-        "emission_pseudocount":   0.5
+        "transition_alpha": 0.01,
+        "emission_alpha":   0.5
     }
 }
