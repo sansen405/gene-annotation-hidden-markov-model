@@ -3,7 +3,7 @@
 #include "../parsers/FNA_Parser.hpp"
 #include "../parsers/GFF_Parser.hpp"
 #include "../topology/Topology.hpp"
-#include <iostream>
+#include "test_utils.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,11 +39,6 @@ namespace gene_hmm {
             default:                    return "UNKNOWN";
         }
     }
-
-    static bool ut_pass(const string& label) { cout << "  [PASS] " << label << "\n"; return true; }
-    static bool ut_fail(const string& label) { cout << "  [FAIL] " << label << "\n"; return false; }
-
-    #define CHECK(label, cond) ((cond) ? ut_pass(label) : ut_fail(label))
 
     static void test_sequence_length(const string& fna, const vector<Nucleotide>& nuc_seq) {
         cout << "\n[TEST 1] Sequence length sanity\n";
