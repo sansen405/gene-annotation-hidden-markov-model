@@ -12,28 +12,29 @@ filters, emission models, smoothing) is driven by a JSON profile in
 ```text
 Gene_Analysis_HMM/
 ├── README.md
-├── gene_hmm                    # prebuilt CLI binary (arm64 macOS)
-├── run_tests                   # prebuilt test binary  (arm64 macOS)
 ├── .vscode/
 │   └── settings.json
 ├── src/
 │   ├── topology/
-│   │   └── Topology.hpp        # State enum, Nucleotide enum, allowed transitions
+│   │   └── Topology.hpp           # State enum, Nucleotide enum, allowed transitions
 │   ├── parsers/
-│   │   ├── FNA_Parser.hpp      # FASTA -> nucleotide sequence + chromosome ranges
+│   │   ├── FNA_Parser.hpp         # FASTA -> nucleotide sequence + chromosome ranges
 │   │   ├── FNA_Parser.cpp
-│   │   ├── GFF_Parser.hpp      # GFF  -> per-base region/state labels
+│   │   ├── GFF_Parser.hpp         # GFF  -> per-base region/state labels
 │   │   └── GFF_Parser.cpp
 │   ├── model/
-│   │   ├── Transition_Table.hpp   # bigram counts -> log-prob transition matrix
-│   │   └── Transition_Table.cpp
-│   ├── training/               # (planned) trainer, gene filtering, counters
-│   ├── decoding/               # (planned) Viterbi / forward-backward
+│   │   ├── Transition_Model.hpp   # bigram counts -> log-prob transition matrix
+│   │   ├── Transition_Model.cpp
+│   │   ├── Emission_Model.hpp     # emission counts -> log-prob emission tables
+│   │   └── Emission_Model.cpp
+│   ├── training/                  # (planned) trainer, gene filtering, counters
+│   ├── decoding/                  # (planned) Viterbi / forward-backward
 │   └── genome_profiles/
-│       └── yeast.json          # S. cerevisiae S288C (RefSeq GCF_000146045.2)
-└── yeast_data/
-    ├── GCF_000146045.2_R64_genomic.fna
-    └── genomic.gff
+│       └── yeast.json             # S. cerevisiae S288C (RefSeq GCF_000146045.2)
+└── genome_data/
+    └── yeast_data/
+        ├── GCF_000146045.2_R64_genomic.fna
+        └── genomic.gff
 ```
 
 ## Components
@@ -53,9 +54,18 @@ Defines the shared vocabulary used across the project:
   (regions, then HMM states) aligned to the FASTA.
 
 ### `src/model/`
-- **`Transition_Table`** — given the per-base state vector and chromosome
+- **`Transition_Model`** — given the per-base state vector and chromosome
   ranges, counts bigram transitions, computes row sums, and produces a
   log-probability transition matrix with additive (`alpha`) smoothing.
+- **`Emission_Model`** — given the per-base state and nucleotide vectors,
+  counts emissions for three model types and produces smoothed log-probability
+  tables:
+  - **Markov order-1** (`INTERGENIC`, `INTRON`) — 4×4 context→emission table.
+  - **Markov order-5** (`EXON_FRAME`, per frame) — 1024×4 table (4^5 contexts).
+  - **PSSM** (`DONOR`, `ACCEPTOR`) — W×4 position-specific table; donor uses a
+    9-position window (3 left + 6 right), acceptor uses 18 (15 left + 3 right).
+  - **Deterministic** (`START_CODON`, `STOP_CODON`) — returns 0.0 or −∞ based
+    on the expected nucleotide at each codon position; no training required.
 
 ### `src/training/` and `src/decoding/`
 Reserved for the training orchestrator (counting, filtering, emission fitting)
@@ -69,7 +79,7 @@ emission model choices, and smoothing hyperparameters.
 
 Example: [`src/genome_profiles/yeast.json`](src/genome_profiles/yeast.json).
 
-### `yeast_data/`
+### `genome_data/`
 Source FASTA and GFF for *Saccharomyces cerevisiae* S288C
 (RefSeq assembly `GCF_000146045.2`, R64). Referenced from `yeast.json`.
 
@@ -99,6 +109,7 @@ Each profile in `src/genome_profiles/` follows this shape:
 
   "emissions": {
     "INTERGENIC":  { "type": "markov", "order": 1 },
+    "INTRON":      { "type": "markov", "order": 1 },
     "EXON_FRAME":  { "type": "markov", "order": 5, "frame_tied": true },
     "DONOR":       { "type": "pssm", "window_left": 3,  "window_right": 6 },
     "ACCEPTOR":    { "type": "pssm", "window_left": 15, "window_right": 3 },
@@ -113,12 +124,7 @@ Each profile in `src/genome_profiles/` follows this shape:
 }
 ```
 
-## Binaries
-
-The repo includes two prebuilt arm64 macOS binaries at the project root:
-
-- `gene_hmm` — main CLI entry point.
-- `run_tests` — test harness.
+## Build
 
 A build system (CMake / Makefile) and a `main` translation unit have not been
-checked in yet; rebuild instructions will be added once that lands.
+checked in yet; build instructions will be added once that lands.
