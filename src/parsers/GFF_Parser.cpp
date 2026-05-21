@@ -81,7 +81,7 @@ namespace gene_hmm {
             sort(fragments.begin(), fragments.end());
 
             for (size_t i = 0; i < fragments.size(); ++i) {
-                for (int index = fragments[i].start; index <= fragments[i].end; ++index) {
+                for (int index = fragments[i].start; index <= fragments[i].end; index++) {
                     if (index >= 0 && static_cast<size_t>(index) < sequence_length) {
                         regions_sequence[index] = 1;
                     }
@@ -91,7 +91,7 @@ namespace gene_hmm {
                     int intron_start = fragments[i].end + 1;
                     int intron_end = fragments[i+1].start - 1;
 
-                    for (int index = intron_start; index <= intron_end; ++index) {
+                    for (int index = intron_start; index <= intron_end; index++) {
                         if (index >= 0 && static_cast<size_t>(index) < sequence_length) {
                             regions_sequence[index] = 2;
                         }
@@ -104,7 +104,7 @@ namespace gene_hmm {
 
     vector<State> GFF_Parser::parse_states(vector<int> region_sequence) {
         vector<State> state_sequence(region_sequence.size(), State::INTERGENIC);
-        int frame_counter = 0; //Frame of the NEXT exon base: 0 -> EXON_FRAME_1, 1 -> EXON_FRAME_2, 2 -> EXON_FRAME_3
+        int frame_counter = 0; //Frame of the next exon base: 0 -> EXON_FRAME_1, 1 -> EXON_FRAME_2, 2 -> EXON_FRAME_3
         int active_intron = 0;
         size_t index = 0;
         while(index < region_sequence.size()){
@@ -220,6 +220,35 @@ namespace gene_hmm {
             }
         }
 
+        //CLEAN UP: turn all genes that have illegal transitions into all intergenic states
+        int most_recent_intergenic = -1;
+        int num_illegal_transitions = 0;
+        bool is_illegal_transition = false;
+
+
+        for(size_t state_index = 0; state_index < state_sequence.size()-1; state_index++){
+            if(state_sequence[state_index] == State::INTERGENIC){
+                if((int)state_index-most_recent_intergenic > 1 && is_illegal_transition){
+                    for(int i = most_recent_intergenic+1; i < state_index; i++){
+                        state_sequence[i] = State::INTERGENIC;
+                    }
+                    is_illegal_transition = false;
+                    num_illegal_transitions++;
+                }
+                most_recent_intergenic = state_index;
+            }
+            if(find(Transitions.at(state_sequence[state_index]).begin(), 
+                Transitions.at(state_sequence[state_index]).end(), 
+                state_sequence[state_index+1]) == Transitions.at(state_sequence[state_index]).end()){
+                is_illegal_transition = true;
+            }
+        }
+        if(is_illegal_transition)
+            for(size_t i = most_recent_intergenic+1; i < state_sequence.size(); i++)
+                state_sequence[i] = State::INTERGENIC;
+        cout << "Number of illegal transitions: " << num_illegal_transitions << endl;
+
+        //return cleaned state sequence to be used in transition and emission model training
         return state_sequence;
     }
 }
