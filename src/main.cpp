@@ -13,7 +13,9 @@ int main() {
     );
 
     gene_hmm::run_Transition_Model_tests();
+
     gene_hmm::run_Emission_Model_tests();
+    
     gene_hmm::run_Viterbi_tests();
 
     return 0;
