@@ -26,15 +26,10 @@ namespace gene_hmm {
 
         for(size_t t = 1; t < T; t++){
             for(State s = State::START; s < st(S); s = st(idx(s)+1)){
-                // Emission depends on s and t only, NOT on p -> hoist out of inner loop.
-                Log_Prob emit = emission_model.emission_log_prob(s, t, nucleotides);
                 Log_Prob max_prob = LOG_ZERO;
                 State max_prob_prev = State::START;
-
                 for(State p = State::START; p < st(S); p = st(idx(p)+1)){
-                    Log_Prob curr_prob = V[t-1][idx(p)]
-                                       + transition_log_probs[idx(p)][idx(s)]
-                                       + emit;
+                    Log_Prob curr_prob = V[t-1][idx(p)]+ transition_log_probs[idx(p)][idx(s)]+ emission_model.emission_log_prob(s, t, nucleotides);
                     if(curr_prob > max_prob){
                         max_prob = curr_prob;
                         max_prob_prev = p;
