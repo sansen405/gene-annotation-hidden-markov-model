@@ -25,10 +25,10 @@ namespace gene_hmm {
         }
 
         for(size_t t = 1; t < T; t++){
-            for(State s = State::START; s < st(S); s = st(idx(s)+1)){
+            for(State s = State::INTERGENIC; s < st(S); s = st(idx(s)+1)){
                 Log_Prob max_prob = LOG_ZERO;
                 State max_prob_prev = State::START;
-                for(State p = State::START; p < st(S); p = st(idx(p)+1)){
+                for(State p = State::INTERGENIC; p < st(S); p = st(idx(p)+1)){
                     Log_Prob curr_prob = V[t-1][idx(p)]+ transition_log_probs[idx(p)][idx(s)]+ emission_model.emission_log_prob(s, t, nucleotides);
                     if(curr_prob > max_prob){
                         max_prob = curr_prob;
@@ -42,7 +42,7 @@ namespace gene_hmm {
 
         Log_Prob max_prob_final = LOG_ZERO;
         State final_state = State::START;
-        for(State s = State::START; s < st(S); s = st(idx(s)+1)){
+        for(State s = State::INTERGENIC; s < st(S); s = st(idx(s)+1)){
             Log_Prob curr_prob_final = V[T-1][idx(s)];
             if (curr_prob_final > max_prob_final){
                 max_prob_final = curr_prob_final;
