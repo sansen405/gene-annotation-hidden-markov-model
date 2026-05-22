@@ -37,6 +37,10 @@ namespace gene_hmm {
     const size_t NUM_NUCLEOTIDES = 4;
     const size_t MEMORY_WINDOW = 5;
 
+    inline size_t idx(State s)      { return static_cast<size_t>(s); }
+    inline size_t idx(Nucleotide n) { return static_cast<size_t>(n) - 1; }
+    inline State  st(size_t s)      { return static_cast<State>(s); }
+
     const unordered_map<State, vector<State>> Transitions = {
         {State::START, {State::INTERGENIC, State::START_CODON_1}},
         {State::INTERGENIC, {State::INTERGENIC, State::START_CODON_1, State::END}},

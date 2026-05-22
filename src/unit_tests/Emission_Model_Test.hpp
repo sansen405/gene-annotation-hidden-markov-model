@@ -21,7 +21,7 @@ namespace gene_hmm {
     static size_t encode_5mer_ref(const vector<Nucleotide>& nucs, size_t pos) {
         size_t ctx = 0;
         for (size_t i = 0; i < 5; ++i)
-            ctx = ctx * NUM_NUCLEOTIDES + (static_cast<size_t>(nucs[pos - 5 + i]) - 1);
+            ctx = ctx * NUM_NUCLEOTIDES + idx(nucs[pos - 5 + i]);
         return ctx;
     }
 

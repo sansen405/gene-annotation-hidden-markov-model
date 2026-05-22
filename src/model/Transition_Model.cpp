@@ -12,14 +12,12 @@ namespace gene_hmm{
     Transition_Model::Count_Matrix Transition_Model::count_bigrams(const vector<State> & state_sequence, const vector<Chromosome_Range>& chromosome_range){
         Count_Matrix bigram_count = {};
         for (const auto& chromosome: chromosome_range){
-            bigram_count[static_cast<size_t>(State::START)][static_cast<size_t>(state_sequence[chromosome.start])]++;
+            bigram_count[idx(State::START)][idx(state_sequence[chromosome.start])]++;
             for(size_t pos = chromosome.start; pos < chromosome.end - 1; ++pos){
-                size_t curr_state = static_cast<size_t>(state_sequence[pos]);
-                size_t next_state = static_cast<size_t>(state_sequence[pos + 1]);
-                bigram_count[curr_state][next_state]++;
+                bigram_count[idx(state_sequence[pos])][idx(state_sequence[pos + 1])]++;
             }
 
-            bigram_count[static_cast<size_t>(state_sequence[chromosome.end -1])][static_cast<size_t>(State::END)]++;
+            bigram_count[idx(state_sequence[chromosome.end - 1])][idx(State::END)]++;
         }
         return bigram_count;
     }
@@ -27,10 +25,9 @@ namespace gene_hmm{
     Transition_Model::Row_Sum_Vector Transition_Model::count_outgoing(const vector<State> & state_sequence, const vector<Chromosome_Range>& chromosome_range){
         Row_Sum_Vector outgoing_count = {};
         for (const auto& chromosome: chromosome_range){
-            outgoing_count[static_cast<size_t>(State::START)]++;
+            outgoing_count[idx(State::START)]++;
             for(size_t pos = chromosome.start; pos < chromosome.end; ++pos){
-                size_t curr_state = static_cast<size_t>(state_sequence[pos]);
-                outgoing_count[curr_state]++;
+                outgoing_count[idx(state_sequence[pos])]++;
             }
         }
         return outgoing_count;
