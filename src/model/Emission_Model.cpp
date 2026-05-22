@@ -1,4 +1,5 @@
 #include "../model/Emission_Model.hpp"
+#include "../genome_profiles/Genome_Profile.hpp"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -10,10 +11,13 @@ namespace gene_hmm{
     using namespace std;
 
     Emission_Model::Emission_Model(){
-        // 1/(4 nucleotides) = 0.25/nucleotide
-        const array<Log_Prob, NUM_NUCLEOTIDES> uniform_row = {log(0.25), log(0.25), log(0.25), log(0.25)};
+        const auto& em = profile.emissions;
+        donor_window_left     = em.count("DONOR")    ? em.at("DONOR").window_left     : 3;
+        donor_window_right    = em.count("DONOR")    ? em.at("DONOR").window_right    : 6;
+        acceptor_window_left  = em.count("ACCEPTOR") ? em.at("ACCEPTOR").window_left  : 15;
+        acceptor_window_right = em.count("ACCEPTOR") ? em.at("ACCEPTOR").window_right : 3;
 
-        //initialization
+        const array<Log_Prob, NUM_NUCLEOTIDES> uniform_row = {log(0.25), log(0.25), log(0.25), log(0.25)};
         for(auto& row : intergenic_lp) row = uniform_row;
         for(auto& row : intron_lp) row = uniform_row;
         for(auto& row : exon_lp) row = uniform_row;
@@ -140,7 +144,8 @@ namespace gene_hmm{
         return counts;
     }
 
-    Emission_Model::Markov1_Log_Prob Emission_Model::compute_markov1_log_probs(const Markov1_Count& counts, double alpha){
+    Emission_Model::Markov1_Log_Prob Emission_Model::compute_markov1_log_probs(const Markov1_Count& counts){
+        const double alpha = profile.emission_alpha;
         Markov1_Log_Prob log_prob = {};
         for(size_t context = 0; context < NUM_NUCLEOTIDES; ++ context){
             uint64_t row_sum = 0;
@@ -154,7 +159,8 @@ namespace gene_hmm{
         return log_prob;
     }
 
-    Emission_Model::Markov5_Log_Prob Emission_Model::compute_markov5_log_probs(const Markov5_Count& counts, double alpha){
+    Emission_Model::Markov5_Log_Prob Emission_Model::compute_markov5_log_probs(const Markov5_Count& counts){
+        const double alpha = profile.emission_alpha;
         Markov5_Log_Prob log_prob = {};
         for(size_t context = 0; context < MARKOV5_CONTEXTS; ++ context){
             uint64_t row_sum = 0;
@@ -168,7 +174,8 @@ namespace gene_hmm{
         return log_prob;
     }
 
-    Emission_Model::PSSM_Log_Prob Emission_Model::compute_pssm_log_probs(const PSSM_Count& counts, double alpha){
+    Emission_Model::PSSM_Log_Prob Emission_Model::compute_pssm_log_probs(const PSSM_Count& counts){
+        const double alpha = profile.emission_alpha;
         size_t count_size = counts.size();
         PSSM_Log_Prob log_prob(count_size, array<Log_Prob, NUM_NUCLEOTIDES>{});
         for(size_t col = 0; col < count_size; ++col){
@@ -178,7 +185,6 @@ namespace gene_hmm{
                 log_prob[col][n] = log((counts[col][n] + alpha)/(col_sum + alpha*NUM_NUCLEOTIDES));
             }
         }
-
         return log_prob;
     }
 

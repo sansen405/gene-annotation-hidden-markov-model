@@ -24,8 +24,7 @@ namespace gene_hmm {
         //(3) Compute the log probability matrix.
         static Count_Matrix count_bigrams(const vector<State>& states, const vector<Chromosome_Range>& chromosomes);
         static Row_Sum_Vector count_outgoing(const vector<State>& states, const vector<Chromosome_Range>& chromosomes);
-        static Log_Prob_Matrix compute_log_probs(const vector<State>& states, const vector<Chromosome_Range>& chromosomes,
-                                               double alpha);
+        static Log_Prob_Matrix compute_log_probs(const vector<State>& states, const vector<Chromosome_Range>& chromosomes);
     };
 
 }

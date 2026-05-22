@@ -38,15 +38,15 @@ namespace gene_hmm {
             Emission_Config cfg;
             string type = val["type"];
             if (type == "markov") {
-                cfg.type       = Emission_Type::MARKOV;
+                cfg.type       = Emission_Family::MARKOV;
                 cfg.order      = val.value("order",      1);
                 cfg.frame_tied = val.value("frame_tied", false);
             } else if (type == "pssm") {
-                cfg.type         = Emission_Type::PSSM;
+                cfg.type         = Emission_Family::PSSM;
                 cfg.window_left  = val["window_left"];
                 cfg.window_right = val["window_right"];
             } else {
-                cfg.type = Emission_Type::DETERMINISTIC;
+                cfg.type = Emission_Family::DETERMINISTIC;
             }
             p.emissions[name] = cfg;
         }

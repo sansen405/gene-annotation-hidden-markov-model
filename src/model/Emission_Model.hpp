@@ -48,10 +48,10 @@ namespace gene_hmm {
         PSSM_Log_Prob    acceptor_lp;
 
         //PSSM window sizes (hardcoded for now)
-        size_t donor_window_left     = 3;
-        size_t donor_window_right    = 6;
-        size_t acceptor_window_left  = 15;
-        size_t acceptor_window_right = 3;
+        size_t donor_window_left;
+        size_t donor_window_right;
+        size_t acceptor_window_left;
+        size_t acceptor_window_right;
 
         //State -> emission family
         static const unordered_map<State, Emission_Type> State_To_Emission_Type;
@@ -87,9 +87,9 @@ namespace gene_hmm {
             size_t window_right);
 
         //(2) Compute log probability matrices from counts
-        static Markov1_Log_Prob compute_markov1_log_probs(const Markov1_Count& counts, double alpha);
-        static Markov5_Log_Prob compute_markov5_log_probs(const Markov5_Count& counts, double alpha);
-        static PSSM_Log_Prob    compute_pssm_log_probs(const PSSM_Count& counts, double alpha);
+        static Markov1_Log_Prob compute_markov1_log_probs(const Markov1_Count& counts);
+        static Markov5_Log_Prob compute_markov5_log_probs(const Markov5_Count& counts);
+        static PSSM_Log_Prob    compute_pssm_log_probs(const PSSM_Count& counts);
 
         //(3) Return log P(nuc | state) for deterministic states (START/STOP codons)
         static Log_Prob get_deterministic_log_prob(State state, Nucleotide nuc);

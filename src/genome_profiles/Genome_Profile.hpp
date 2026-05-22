@@ -8,10 +8,10 @@ namespace gene_hmm {
 
     using namespace std;
 
-    enum class Emission_Type { MARKOV, PSSM, DETERMINISTIC };
+    enum class Emission_Family { MARKOV, PSSM, DETERMINISTIC };
 
     struct Emission_Config {
-        Emission_Type type        = Emission_Type::DETERMINISTIC;
+        Emission_Family type        = Emission_Family::DETERMINISTIC;
         size_t        order       = 1;      // MARKOV only
         bool          frame_tied  = false;  // MARKOV only
         size_t        window_left = 0;      // PSSM only
@@ -55,12 +55,3 @@ namespace gene_hmm {
 
 }
 
-//Use in Project --> Replace Variable Names of certain alpha with these
-// gene_hmm::profile.emission_alpha          // 0.1
-// gene_hmm::profile.transition_alpha        // 0.02
-// gene_hmm::profile.emissions["DONOR"].window_left   // 3
-// gene_hmm::profile.emissions["DONOR"].window_right  // 6
-// gene_hmm::profile.emissions["ACCEPTOR"].window_left  // 15
-// gene_hmm::profile.emissions["EXON_FRAME"].order      // 5
-// gene_hmm::profile.emissions["EXON_FRAME"].frame_tied // true
-// gene_hmm::profile.min_intron_bp           // 20

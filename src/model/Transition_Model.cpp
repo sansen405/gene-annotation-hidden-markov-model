@@ -1,4 +1,5 @@
 #include "../model/Transition_Model.hpp"
+#include "../genome_profiles/Genome_Profile.hpp"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -33,7 +34,8 @@ namespace gene_hmm{
         return outgoing_count;
     }
 
-    Transition_Model::Log_Prob_Matrix Transition_Model::compute_log_probs(const vector<State> & state_sequence, const vector<Chromosome_Range>& chromosome_range, double alpha){
+    Transition_Model::Log_Prob_Matrix Transition_Model::compute_log_probs(const vector<State> & state_sequence, const vector<Chromosome_Range>& chromosome_range){
+        const double alpha = profile.transition_alpha;
         Log_Prob_Matrix prob_matrix = {};
         Count_Matrix bigram_count = Transition_Model::count_bigrams(state_sequence, chromosome_range);
         Row_Sum_Vector outgoing_count = Transition_Model::count_outgoing(state_sequence, chromosome_range);

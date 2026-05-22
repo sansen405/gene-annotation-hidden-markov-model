@@ -6,6 +6,8 @@
 #include "unit_tests/Viterbi_Test.hpp"
 
 int main() {
+    gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/yeast.json");
+
     gene_hmm::run_FNA_Parser_tests();
 
     gene_hmm::run_GFF_Parser_tests(

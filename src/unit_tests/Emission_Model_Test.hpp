@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../model/Emission_Model.hpp"
+#include "../genome_profiles/Genome_Profile.hpp"
 #include "Test_Utils.hpp"
 #include <cmath>
 #include <string>
@@ -85,10 +86,12 @@ namespace gene_hmm {
     static void test_emission_log_probs() {
         cout << "\n[TEST 4] Emission log probabilities use additive smoothing\n";
 
+        profile.emission_alpha = 1.0;
+
         Emission_Model::Markov1_Count counts = {};
         counts[idx(Nucleotide::A)][idx(Nucleotide::C)] = 3;
 
-        auto log_probs = Emission_Model::compute_markov1_log_probs(counts, 1.0);
+        auto log_probs = Emission_Model::compute_markov1_log_probs(counts);
         CHECK("seen Markov1 emission probability is smoothed",
               emission_approx_equal(log_probs[idx(Nucleotide::A)][idx(Nucleotide::C)], log(4.0 / 7.0)));
         CHECK("unseen Markov1 emission probability receives alpha mass",
@@ -96,7 +99,7 @@ namespace gene_hmm {
 
         Emission_Model::PSSM_Count pssm_counts(1, array<uint64_t, NUM_NUCLEOTIDES>{});
         pssm_counts[0][idx(Nucleotide::G)] = 2;
-        auto pssm_log_probs = Emission_Model::compute_pssm_log_probs(pssm_counts, 1.0);
+        auto pssm_log_probs = Emission_Model::compute_pssm_log_probs(pssm_counts);
         CHECK("PSSM column probabilities are smoothed",
               emission_approx_equal(pssm_log_probs[0][idx(Nucleotide::G)], log(3.0 / 6.0)));
     }
