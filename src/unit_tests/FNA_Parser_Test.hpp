@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../parsers/FNA_Parser.hpp"
-#include "test_utils.hpp"
+#include "Test_Utils.hpp"
 #include <cstdio>
 #include <fstream>
 #include <stdexcept>
