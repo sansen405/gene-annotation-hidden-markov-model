@@ -38,10 +38,25 @@ namespace gene_hmm{
         const double alpha = profile.transition_alpha;
         Log_Prob_Matrix prob_matrix = {};
         Count_Matrix bigram_count = Transition_Model::count_bigrams(state_sequence, chromosome_range);
-        Row_Sum_Vector outgoing_count = Transition_Model::count_outgoing(state_sequence, chromosome_range);
+        for(auto& row : prob_matrix){
+            for(auto& value : row){
+                value = LOG_ZERO;
+            }
+        }
+
         for(size_t i = 0; i < bigram_count.size(); ++i){
-            for(size_t j = 0; j < bigram_count[i].size(); ++j){
-                prob_matrix[i][j] = log((bigram_count[i][j] + alpha)/(outgoing_count[i] + alpha*NUM_STATES));
+            State from = st(i);
+            const auto& allowed = Transitions.at(from);
+            if(allowed.empty()) continue;
+
+            uint64_t allowed_outgoing = 0;
+            for(State to : allowed){
+                allowed_outgoing += bigram_count[i][idx(to)];
+            }
+
+            double denominator = allowed_outgoing + alpha * allowed.size();
+            for(State to : allowed){
+                prob_matrix[i][idx(to)] = log((bigram_count[i][idx(to)] + alpha) / denominator);
             }
         }
         return prob_matrix;

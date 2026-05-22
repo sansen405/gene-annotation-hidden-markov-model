@@ -39,6 +39,7 @@ namespace gene_hmm {
         transitions[idx(State::START)][idx(State::START_CODON_1)] = 0.0;
         transitions[idx(State::START_CODON_1)][idx(State::START_CODON_2)] = 0.0;
         transitions[idx(State::START_CODON_2)][idx(State::START_CODON_3)] = 0.0;
+        transitions[idx(State::START_CODON_3)][idx(State::END)] = 0.0;
 
         vector<State> path = Viterbi::decode(nucs, transitions, model);
         vector<State> expected = {
@@ -59,6 +60,7 @@ namespace gene_hmm {
         auto transitions = make_viterbi_log_zero_matrix();
         transitions[idx(State::START)][idx(State::INTERGENIC)] = 0.0;
         transitions[idx(State::INTERGENIC)][idx(State::INTERGENIC)] = 0.0;
+        transitions[idx(State::INTERGENIC)][idx(State::END)] = 0.0;
 
         vector<State> path = Viterbi::decode(nucs, transitions, model);
 
@@ -80,6 +82,7 @@ namespace gene_hmm {
         transitions[idx(State::START)][idx(State::START_CODON_1)] = log(0.9);
         transitions[idx(State::START_CODON_1)][idx(State::START_CODON_2)] = log(0.9);
         transitions[idx(State::START_CODON_2)][idx(State::START_CODON_3)] = log(0.9);
+        transitions[idx(State::START_CODON_3)][idx(State::END)] = log(0.9);
 
         vector<State> path = Viterbi::decode(nucs, transitions, model);
 

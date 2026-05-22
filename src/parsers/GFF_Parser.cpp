@@ -229,7 +229,7 @@ namespace gene_hmm {
         for(size_t state_index = 0; state_index < state_sequence.size()-1; state_index++){
             if(state_sequence[state_index] == State::INTERGENIC){
                 if((int)state_index-most_recent_intergenic > 1 && is_illegal_transition){
-                    for(int i = most_recent_intergenic+1; i < state_index; i++){
+                    for(size_t i = most_recent_intergenic+1; i < state_index; i++){
                         state_sequence[i] = State::INTERGENIC;
                     }
                     is_illegal_transition = false;

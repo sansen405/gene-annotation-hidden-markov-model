@@ -67,7 +67,7 @@ namespace gene_hmm{
             size_t nuc = idx(nucleotides[pos - window_left + col]);
             total += log_probs[col][nuc];
         }
-        return total;
+        return total / static_cast<Log_Prob>(window_size);
     }
 
     static vector<bool> make_target_set(const vector<State>& target_states){

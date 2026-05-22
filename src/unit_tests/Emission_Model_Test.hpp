@@ -131,8 +131,8 @@ namespace gene_hmm {
               emission_approx_equal(model.emission_log_prob(State::INTERGENIC, 0, nucs), log(0.25)));
         CHECK("EXON_FRAME uses uniform fallback before 5-base context exists",
               emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_1, 4, nucs), log(0.25)));
-        CHECK("DONOR PSSM uses full default window when available",
-              emission_approx_equal(model.emission_log_prob(State::DONOR_1, 3, nucs), 9.0 * log(0.25)));
+        CHECK("DONOR PSSM averages the full default window when available",
+              emission_approx_equal(model.emission_log_prob(State::DONOR_1, 3, nucs), log(0.25)));
         CHECK("DONOR PSSM returns LOG_ZERO near boundary",
               model.emission_log_prob(State::DONOR_1, 1, nucs) == LOG_ZERO);
         CHECK("START_CODON_3 dispatches to deterministic G",

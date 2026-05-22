@@ -72,7 +72,7 @@ namespace gene_hmm {
     }
 
     static void test_transition_log_probs() {
-        cout << "\n[TEST 4] Log probabilities use additive smoothing\n";
+        cout << "\n[TEST 4] Log probabilities smooth only legal topology transitions\n";
 
         profile.transition_alpha = 1.0;
 
@@ -80,12 +80,14 @@ namespace gene_hmm {
         auto ranges = transition_fixture_ranges();
         auto log_probs = Transition_Model::compute_log_probs(states, ranges);
 
-        Log_Prob expected_seen = log((2.0 + 1.0) / (3.0 + NUM_STATES));
-        Log_Prob expected_unseen = log((0.0 + 1.0) / (3.0 + NUM_STATES));
+        Log_Prob expected_seen = log((2.0 + 1.0) / (3.0 + Transitions.at(State::INTERGENIC).size()));
+        Log_Prob expected_legal_unseen = log((0.0 + 1.0) / (3.0 + Transitions.at(State::INTERGENIC).size()));
         CHECK("seen transition probability is smoothed from counts",
               approx_equal(log_probs[idx(State::INTERGENIC)][idx(State::START_CODON_1)], expected_seen));
-        CHECK("unseen transition probability still receives alpha mass",
-              approx_equal(log_probs[idx(State::INTERGENIC)][idx(State::STOP_CODON_1)], expected_unseen));
+        CHECK("legal unseen transition receives alpha mass",
+              approx_equal(log_probs[idx(State::INTERGENIC)][idx(State::END)], expected_legal_unseen));
+        CHECK("illegal transition remains impossible",
+              log_probs[idx(State::INTERGENIC)][idx(State::STOP_CODON_1)] == LOG_ZERO);
     }
 
     static void run_Transition_Model_tests() {

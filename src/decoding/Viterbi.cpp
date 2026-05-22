@@ -19,16 +19,28 @@ namespace gene_hmm {
         Viterbi_Matrix     V(T, array<Log_Prob, S>{});
         Backpointer_Matrix B(T, array<State, S>{});
 
-        for(State s = State::START; s < st(S); s = st(idx(s)+1)){
+        for(auto& row : V){
+            for(auto& value : row){
+                value = LOG_ZERO;
+            }
+        }
+
+        for(auto& row : B){
+            for(auto& value : row){
+                value = State::START;
+            }
+        }
+
+        for(State s = State::INTERGENIC; s < State::END; s = st(idx(s)+1)){
             V[0][idx(s)]  = transition_log_probs[idx(State::START)][idx(s)];
             V[0][idx(s)] += emission_model.emission_log_prob(s, 0, nucleotides);
         }
 
         for(size_t t = 1; t < T; t++){
-            for(State s = State::INTERGENIC; s < st(S); s = st(idx(s)+1)){
+            for(State s = State::INTERGENIC; s < State::END; s = st(idx(s)+1)){
                 Log_Prob max_prob = LOG_ZERO;
                 State max_prob_prev = State::START;
-                for(State p = State::INTERGENIC; p < st(S); p = st(idx(p)+1)){
+                for(State p = State::INTERGENIC; p < State::END; p = st(idx(p)+1)){
                     Log_Prob curr_prob = V[t-1][idx(p)]+ transition_log_probs[idx(p)][idx(s)]+ emission_model.emission_log_prob(s, t, nucleotides);
                     if(curr_prob > max_prob){
                         max_prob = curr_prob;
@@ -42,8 +54,8 @@ namespace gene_hmm {
 
         Log_Prob max_prob_final = LOG_ZERO;
         State final_state = State::START;
-        for(State s = State::INTERGENIC; s < st(S); s = st(idx(s)+1)){
-            Log_Prob curr_prob_final = V[T-1][idx(s)];
+        for(State s = State::INTERGENIC; s < State::END; s = st(idx(s)+1)){
+            Log_Prob curr_prob_final = V[T-1][idx(s)] + transition_log_probs[idx(s)][idx(State::END)];
             if (curr_prob_final > max_prob_final){
                 max_prob_final = curr_prob_final;
                 final_state = s;
