@@ -1,4 +1,4 @@
-# Gene_Analysis_HMM
+# Geneome Annotation Hidden Markov Model
 
 A C++ Hidden Markov Model for ab-initio gene prediction in eukaryotic genomes.
 The model uses a 21-state topology (intergenic, start/stop codons, frame-tracked
