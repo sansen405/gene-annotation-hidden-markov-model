@@ -1,0 +1,8 @@
+# Keep large non-yeast genome datasets local.
+genome_data/aspergillus_data/
+genome_data/c_elegans_data/
+genome_data/candida_data/
+genome_data/cryptococcus_data/
+genome_data/neurospora_data/
+genome_data/s_pombe_data/
+genome_data/salmonella_data/
