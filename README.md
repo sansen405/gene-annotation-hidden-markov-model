@@ -137,7 +137,7 @@ Each profile in `src/genome_profiles/` follows this shape:
 
   "smoothing": {
     "transition_alpha": 0.02,
-    "emission_alpha":   0.5
+    "emission_alpha":   0.1
   }
 }
 ```
