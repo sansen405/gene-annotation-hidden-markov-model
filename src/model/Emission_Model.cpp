@@ -12,17 +12,23 @@ namespace gene_hmm{
 
     Emission_Model::Emission_Model(){
         const auto& em = profile.emissions;
+        start_window_left     = (em.count("START_CODON") && em.at("START_CODON").window_left + em.at("START_CODON").window_right > 0) ? em.at("START_CODON").window_left     : 6;
+        start_window_right    = (em.count("START_CODON") && em.at("START_CODON").window_left + em.at("START_CODON").window_right > 0) ? em.at("START_CODON").window_right    : 9;
         donor_window_left     = em.count("DONOR")    ? em.at("DONOR").window_left     : 3;
         donor_window_right    = em.count("DONOR")    ? em.at("DONOR").window_right    : 6;
         acceptor_window_left  = em.count("ACCEPTOR") ? em.at("ACCEPTOR").window_left  : 15;
         acceptor_window_right = em.count("ACCEPTOR") ? em.at("ACCEPTOR").window_right : 3;
 
         const array<Log_Prob, NUM_NUCLEOTIDES> uniform_row = {log(0.25), log(0.25), log(0.25), log(0.25)};
+        const array<Log_Prob, NUM_NUCLEOTIDES> neutral_log_odds_row = {0.0, 0.0, 0.0, 0.0};
         for(auto& row : intergenic_lp) row = uniform_row;
         for(auto& row : intron_lp) row = uniform_row;
         for(auto& row : exon_lp) row = uniform_row;
-        donor_lp.assign(donor_window_left + donor_window_right, uniform_row);
-        acceptor_lp.assign(acceptor_window_left + acceptor_window_right, uniform_row);
+        for(auto& frame_table : exon_frame_lp)
+            for(auto& row : frame_table) row = uniform_row;
+        start_codon_lp.assign(start_window_left + start_window_right, neutral_log_odds_row);
+        donor_lp.assign(donor_window_left + donor_window_right, neutral_log_odds_row);
+        acceptor_lp.assign(acceptor_window_left + acceptor_window_right, neutral_log_odds_row);
     }
 
     const unordered_map<State, Emission_Type> Emission_Model::State_To_Emission_Type = {
@@ -67,7 +73,7 @@ namespace gene_hmm{
             size_t nuc = idx(nucleotides[pos - window_left + col]);
             total += log_probs[col][nuc];
         }
-        return total / static_cast<Log_Prob>(window_size);
+        return total;
     }
 
     static vector<bool> make_target_set(const vector<State>& target_states){
@@ -77,12 +83,76 @@ namespace gene_hmm{
         return is_target;
     }
 
+    static bool has_splice_consensus(
+        const vector<Nucleotide>& nucleotides,
+        size_t pos,
+        Splice_Signal signal)
+    {
+        if(signal == Splice_Signal::DONOR){
+            return pos + 1 < nucleotides.size() && nucleotides[pos] == Nucleotide::G &&
+                nucleotides[pos + 1] == Nucleotide::T;
+        }
+
+        if(signal == Splice_Signal::START_CODON){
+            return pos + 2 < nucleotides.size() && nucleotides[pos] == Nucleotide::A &&
+                nucleotides[pos + 1] == Nucleotide::T && nucleotides[pos + 2] == Nucleotide::G;
+        }
+
+        return pos > 0 &&  nucleotides[pos - 1] == Nucleotide::A && nucleotides[pos] == Nucleotide::G;
+    }
+
     static size_t encode_5mer(const vector<Nucleotide>& nucs, size_t pos){
         size_t context = 0;
         for(size_t i = 0; i < 5; ++i){
             context = context * NUM_NUCLEOTIDES + (static_cast<size_t>(nucs[pos - 5 + i]) - 1);
         }
         return context;
+    }
+
+    static size_t exon_frame_index(State state){
+        switch(state){
+            case State::EXON_FRAME_1: return 0;
+            case State::EXON_FRAME_2: return 1;
+            case State::EXON_FRAME_3: return 2;
+            default: return 0;
+        }
+    }
+
+    static Log_Prob deterministic_log_prob(
+        State state,
+        size_t pos,
+        const vector<Nucleotide>& nucleotides)
+    {
+        if(state == State::STOP_CODON_3){
+            if(pos < 2 || nucleotides[pos - 2] != Nucleotide::T) return LOG_ZERO;
+            bool is_taa = nucleotides[pos - 1] == Nucleotide::A && nucleotides[pos] == Nucleotide::A;
+            bool is_tag = nucleotides[pos - 1] == Nucleotide::A && nucleotides[pos] == Nucleotide::G;
+            bool is_tga = nucleotides[pos - 1] == Nucleotide::G && nucleotides[pos] == Nucleotide::A;
+            return (is_taa || is_tag || is_tga) ? 0.0 : LOG_ZERO;
+        }
+
+        return Emission_Model::get_deterministic_log_prob(state, nucleotides[pos]);
+    }
+
+    static Log_Prob start_codon_signal_log_prob(
+        const Emission_Model::PSSM_Log_Prob& log_probs,
+        const vector<Nucleotide>& nucleotides,
+        size_t pos,
+        size_t window_left,
+        size_t window_right)
+    {
+        const size_t window_size = window_left + window_right;
+        if(!has_splice_consensus(nucleotides, pos, Splice_Signal::START_CODON)) return LOG_ZERO;
+        if(pos < window_left) return 0.0;
+        if(pos + window_right > nucleotides.size()) return 0.0;
+        if(log_probs.size() < window_size) return 0.0;
+
+        Log_Prob total = 0.0;
+        for(size_t col = 0; col < window_size; ++col){
+            size_t nuc = idx(nucleotides[pos - window_left + col]);
+            total += log_probs[col][nuc];
+        }
+        return total;
     }
     //helper functions end
 
@@ -144,6 +214,36 @@ namespace gene_hmm{
         return counts;
     }
 
+    Emission_Model::PSSM_Count Emission_Model::count_pssm_background_emissions(
+        const vector<State>& state_sequence,
+        const vector<Nucleotide>& nucleotides_sequence,
+        const vector<Chromosome_Range>& chromosome_range,
+        const vector<State>& target_states,
+        size_t window_left,
+        size_t window_right,
+        Splice_Signal signal)
+    {
+        const size_t window_size = window_left + window_right;
+        vector<bool> is_target = make_target_set(target_states);
+        PSSM_Count counts(window_size, array<uint64_t, NUM_NUCLEOTIDES>{});
+
+        for(const auto& chr: chromosome_range){
+            for(size_t pos = chr.start; pos < chr.end; ++pos){
+                if(is_target[static_cast<size_t>(state_sequence[pos])]) continue;
+                if(pos < chr.start + window_left) continue;
+                if(pos + window_right > chr.end) continue;
+                if(!has_splice_consensus(nucleotides_sequence, pos, signal)) continue;
+
+                for(size_t col = 0; col < window_size; ++col){
+                    size_t nucleotide = static_cast<size_t>(nucleotides_sequence[pos - window_left + col]) - 1;
+                    counts[col][nucleotide]++;
+                }
+            }
+        }
+
+        return counts;
+    }
+
     Emission_Model::Markov1_Log_Prob Emission_Model::compute_markov1_log_probs(const Markov1_Count& counts){
         const double alpha = profile.emission_alpha;
         Markov1_Log_Prob log_prob = {};
@@ -188,6 +288,32 @@ namespace gene_hmm{
         return log_prob;
     }
 
+    Emission_Model::PSSM_Log_Prob Emission_Model::compute_pssm_log_odds(
+        const PSSM_Count& site_counts,
+        const PSSM_Count& background_counts)
+    {
+        const double alpha = profile.emission_alpha;
+        size_t count_size = site_counts.size();
+        PSSM_Log_Prob log_odds(count_size, array<Log_Prob, NUM_NUCLEOTIDES>{});
+
+        for(size_t col = 0; col < count_size; ++col){
+            uint64_t site_sum = 0;
+            uint64_t background_sum = 0;
+            for(size_t n = 0; n < NUM_NUCLEOTIDES; ++n){
+                site_sum += site_counts[col][n];
+                background_sum += background_counts[col][n];
+            }
+
+            for(size_t n = 0; n < NUM_NUCLEOTIDES; ++n){
+                double site_prob = (site_counts[col][n] + alpha) / (site_sum + alpha * NUM_NUCLEOTIDES);
+                double background_prob = (background_counts[col][n] + alpha) / (background_sum + alpha * NUM_NUCLEOTIDES);
+                log_odds[col][n] = log(site_prob) - log(background_prob);
+            }
+        }
+
+        return log_odds;
+    }
+
     Log_Prob Emission_Model::get_deterministic_log_prob(State state, Nucleotide nucleotide){
         switch(state ){
             case State::START_CODON_1: return (nucleotide == Nucleotide::A) ? 0.0 : LOG_ZERO;
@@ -219,13 +345,18 @@ namespace gene_hmm{
                 return intron_lp[idx(nucleotides[t - 1])][idx(nucleotides[t])];
             case Emission_Type::MARKOV5_EXON:
                 if(t < 5) return log(1.0 / NUM_NUCLEOTIDES);
-                return exon_lp[encode_5mer(nucleotides, t)][idx(nucleotides[t])];
+                return exon_frame_lp[exon_frame_index(state)][encode_5mer(nucleotides, t)][idx(nucleotides[t])];
             case Emission_Type::PSSM_DONOR:
+                if(!has_splice_consensus(nucleotides, t, Splice_Signal::DONOR)) return LOG_ZERO;
                 return pssm_window_log_prob(donor_lp, nucleotides, t, donor_window_left, donor_window_right);
             case Emission_Type::PSSM_ACCEPTOR:
+                if(!has_splice_consensus(nucleotides, t, Splice_Signal::ACCEPTOR)) return LOG_ZERO;
                 return pssm_window_log_prob(acceptor_lp, nucleotides, t, acceptor_window_left, acceptor_window_right);
             case Emission_Type::DETERMINISTIC:
-                return get_deterministic_log_prob(state, nucleotides[t]);
+                if(state == State::START_CODON_1){
+                    return start_codon_signal_log_prob(start_codon_lp, nucleotides, t, start_window_left, start_window_right);
+                }
+                return deterministic_log_prob(state, t, nucleotides);
         }
 
         return LOG_ZERO;

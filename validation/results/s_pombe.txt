@@ -1,0 +1,40 @@
+Loading validation profile: s_pombe
+FASTA: genome_data/s_pombe_data/GCF_000002945.1_ASM294v2_genomic.fna
+GFF: genome_data/s_pombe_data/GCF_000002945.1_ASM294v2_genomic.gff
+Number of illegal transitions: 27
+Training chromosomes: 3
+Evaluation chromosomes: 1
+
+Training diagnostics:
+gold all chromosomes intergenic=8879231 start=7590 exon=3491115 donor=2476 intron=200773 acceptor=2476 stop=7590
+log P(EXON_FRAME_3 -> EXON_FRAME_1)=-0.00299974
+log P(EXON_FRAME_3 -> DONOR_1)=-7.09857
+log P(EXON_FRAME_3 -> STOP_CODON_1)=-6.13351
+log P(INTRON_1 -> INTRON_1)=-0.0117367
+log P(INTRON_1 -> ACCEPTOR_1)=-4.4509
+
+Decoding NC_003424.3 bases=5579133
+gold NC_003424.3 intergenic=3939249 start=3369 exon=1544988 donor=1067 intron=86024 acceptor=1067 stop=3369
+predicted NC_003424.3 intergenic=3888321 start=3999 exon=1682814 donor=0 intron=0 acceptor=0 stop=3999
+gold exon emission magnitude NC_003424.3 count=1544988 avg_log_emission=-1.343
+gold donor PSSM emission magnitude NC_003424.3 count=1067 avg_log_emission=-6.5009
+gold acceptor PSSM emission magnitude NC_003424.3 count=1067 avg_log_emission=-19.6011
+
+=== Full Genome Holdout Validation ===
+evaluated bases=5579133
+exact 21-state accuracy=0.716712
+coding precision=0.6990 recall=0.7617 f1=0.7290 accuracy=0.8425 tp=1181959 fp=508853 fn=369767 tn=3518554
+intron precision=0.0000 recall=0.0000 f1=0.0000 accuracy=0.9842 tp=0 fp=0 fn=88158 tn=5490975
+
+Boundary metrics:
+start exact_matches=290 predicted=1333 gold=1123 precision=0.2176 recall=0.2582
+stop exact_matches=199 predicted=1333 gold=1123 precision=0.1493 recall=0.1772
+
+Structure:
+illegal predicted transitions=0
+predicted gene intervals count=1333 examples: NC_003424.3:[437,4814) NC_003424.3:[5256,5670) NC_003424.3:[7578,9255) NC_003424.3:[12021,12648) NC_003424.3:[17185,18547)
+gold gene intervals count=1123 examples: NC_003424.3:[7618,9274) NC_003424.3:[12157,12994) NC_003424.3:[13664,14555) NC_003424.3:[15854,16226) NC_003424.3:[18071,18557)
+
+Error examples:
+false-positive gene-state runs count=776 examples: NC_003424.3:[437,4814) NC_003424.3:[5256,5670) NC_003424.3:[7578,7618) NC_003424.3:[12021,12157) NC_003424.3:[17185,18071) NC_003424.3:[45414,45477) NC_003424.3:[59746,60706) NC_003424.3:[62860,62988) NC_003424.3:[65019,66336) NC_003424.3:[88417,88846)
+false-negative gene-state runs count=1191 examples: NC_003424.3:[9255,9274) NC_003424.3:[12648,12994) NC_003424.3:[13664,14555) NC_003424.3:[15854,16226) NC_003424.3:[18547,18557) NC_003424.3:[20823,21015) NC_003424.3:[21586,22508) NC_003424.3:[28737,29638) NC_003424.3:[32229,32670) NC_003424.3:[33834,34272)

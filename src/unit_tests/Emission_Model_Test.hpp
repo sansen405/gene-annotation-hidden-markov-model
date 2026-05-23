@@ -102,6 +102,12 @@ namespace gene_hmm {
         auto pssm_log_probs = Emission_Model::compute_pssm_log_probs(pssm_counts);
         CHECK("PSSM column probabilities are smoothed",
               emission_approx_equal(pssm_log_probs[0][idx(Nucleotide::G)], log(3.0 / 6.0)));
+
+        Emission_Model::PSSM_Count background_counts(1, array<uint64_t, NUM_NUCLEOTIDES>{});
+        background_counts[0][idx(Nucleotide::A)] = 2;
+        auto pssm_log_odds = Emission_Model::compute_pssm_log_odds(pssm_counts, background_counts);
+        CHECK("PSSM log-odds compares site and background columns",
+              emission_approx_equal(pssm_log_odds[0][idx(Nucleotide::G)], log(3.0 / 6.0) - log(1.0 / 6.0)));
     }
 
     static void test_emission_deterministic_codons() {
@@ -122,8 +128,8 @@ namespace gene_hmm {
 
         Emission_Model model;
         vector<Nucleotide> nucs = {
-            Nucleotide::A, Nucleotide::T, Nucleotide::G, Nucleotide::C,
-            Nucleotide::A, Nucleotide::C, Nucleotide::G, Nucleotide::T,
+            Nucleotide::A, Nucleotide::T, Nucleotide::G, Nucleotide::G,
+            Nucleotide::T, Nucleotide::C, Nucleotide::G, Nucleotide::T,
             Nucleotide::A, Nucleotide::C
         };
 
@@ -131,12 +137,41 @@ namespace gene_hmm {
               emission_approx_equal(model.emission_log_prob(State::INTERGENIC, 0, nucs), log(0.25)));
         CHECK("EXON_FRAME uses uniform fallback before 5-base context exists",
               emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_1, 4, nucs), log(0.25)));
-        CHECK("DONOR PSSM averages the full default window when available",
-              emission_approx_equal(model.emission_log_prob(State::DONOR_1, 3, nucs), log(0.25)));
+        CHECK("DONOR PSSM uses neutral default log-odds for canonical GT windows",
+              emission_approx_equal(model.emission_log_prob(State::DONOR_1, 3, nucs), 0.0));
         CHECK("DONOR PSSM returns LOG_ZERO near boundary",
               model.emission_log_prob(State::DONOR_1, 1, nucs) == LOG_ZERO);
+        CHECK("START_CODON_1 uses neutral default signal for ATG",
+              model.emission_log_prob(State::START_CODON_1, 0, nucs) == 0.0);
         CHECK("START_CODON_3 dispatches to deterministic G",
               model.emission_log_prob(State::START_CODON_3, 2, nucs) == 0.0);
+
+        size_t exon_context = test_encode_5mer(nucs, 5);
+        model.exon_frame_lp[0][exon_context][idx(nucs[5])] = log(0.7);
+        model.exon_frame_lp[1][exon_context][idx(nucs[5])] = log(0.2);
+        model.exon_frame_lp[2][exon_context][idx(nucs[5])] = log(0.1);
+        CHECK("EXON_FRAME_1 uses frame-specific Markov5 table",
+              emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_1, 5, nucs), log(0.7)));
+        CHECK("EXON_FRAME_2 uses frame-specific Markov5 table",
+              emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_2, 5, nucs), log(0.2)));
+        CHECK("EXON_FRAME_3 uses frame-specific Markov5 table",
+              emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_3, 5, nucs), log(0.1)));
+
+        vector<Nucleotide> taa = {Nucleotide::T, Nucleotide::A, Nucleotide::A};
+        vector<Nucleotide> tag = {Nucleotide::T, Nucleotide::A, Nucleotide::G};
+        vector<Nucleotide> tga = {Nucleotide::T, Nucleotide::G, Nucleotide::A};
+        vector<Nucleotide> tgg = {Nucleotide::T, Nucleotide::G, Nucleotide::G};
+        vector<Nucleotide> acg = {Nucleotide::A, Nucleotide::C, Nucleotide::G};
+        CHECK("START_CODON_1 rejects non-ATG context",
+              model.emission_log_prob(State::START_CODON_1, 0, acg) == LOG_ZERO);
+        CHECK("STOP_CODON_3 allows TAA",
+              model.emission_log_prob(State::STOP_CODON_3, 2, taa) == 0.0);
+        CHECK("STOP_CODON_3 allows TAG",
+              model.emission_log_prob(State::STOP_CODON_3, 2, tag) == 0.0);
+        CHECK("STOP_CODON_3 allows TGA",
+              model.emission_log_prob(State::STOP_CODON_3, 2, tga) == 0.0);
+        CHECK("STOP_CODON_3 rejects TGG",
+              model.emission_log_prob(State::STOP_CODON_3, 2, tgg) == LOG_ZERO);
     }
 
     static void run_Emission_Model_tests() {

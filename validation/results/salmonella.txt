@@ -1,0 +1,40 @@
+Loading validation profile: salmonella
+FASTA: genome_data/salmonella_data/GCF_000006945.2_ASM694v2_genomic.fna
+GFF: genome_data/salmonella_data/GCF_000006945.2_ASM694v2_genomic.gff
+Number of illegal transitions: 219
+Training chromosomes: 1
+Evaluation chromosomes: 1
+
+Training diagnostics:
+gold all chromosomes intergenic=3347616 start=4899 exon=1593969 donor=0 intron=0 acceptor=0 stop=4899
+log P(EXON_FRAME_3 -> EXON_FRAME_1)=-0.00542959
+log P(EXON_FRAME_3 -> DONOR_1)=-12.6871
+log P(EXON_FRAME_3 -> STOP_CODON_1)=-5.21918
+log P(INTRON_1 -> INTRON_1)=-0.693147
+log P(INTRON_1 -> ACCEPTOR_1)=-0.693147
+
+Decoding NC_003197.2 bases=4857450
+gold NC_003197.2 intergenic=3273306 start=4794 exon=1574556 donor=0 intron=0 acceptor=0 stop=4794
+predicted NC_003197.2 intergenic=4779393 start=1596 exon=74865 donor=0 intron=0 acceptor=0 stop=1596
+gold exon emission magnitude NC_003197.2 count=1574556 avg_log_emission=-1.48651
+gold donor PSSM emission magnitude NC_003197.2 count=0
+gold acceptor PSSM emission magnitude NC_003197.2 count=0
+
+=== Full Genome Holdout Validation ===
+evaluated bases=4857450
+exact 21-state accuracy=0.669841
+coding precision=0.5918 recall=0.0292 f1=0.0556 accuracy=0.6768 tp=46195 fp=31862 fn=1537949 tn=3241444
+intron precision=0.0000 recall=0.0000 f1=0.0000 accuracy=1.0000 tp=0 fp=0 fn=0 tn=4857450
+
+Boundary metrics:
+start exact_matches=3 predicted=532 gold=1598 precision=0.0056 recall=0.0019
+stop exact_matches=32 predicted=532 gold=1598 precision=0.0602 recall=0.0200
+
+Structure:
+illegal predicted transitions=0
+predicted gene intervals count=532 examples: NC_003197.2:[373,409) NC_003197.2:[3926,3992) NC_003197.2:[11902,11986) NC_003197.2:[13353,13509) NC_003197.2:[31817,31895)
+gold gene intervals count=1598 examples: NC_003197.2:[189,255) NC_003197.2:[336,2799) NC_003197.2:[2800,3730) NC_003197.2:[3733,5020) NC_003197.2:[7664,8618)
+
+Error examples:
+false-positive gene-state runs count=228 examples: NC_003197.2:[64970,65141) NC_003197.2:[89454,89469) NC_003197.2:[125846,125951) NC_003197.2:[128598,128706) NC_003197.2:[137559,137561) NC_003197.2:[145610,145673) NC_003197.2:[149258,149375) NC_003197.2:[153686,153890) NC_003197.2:[155627,155682) NC_003197.2:[215900,215966)
+false-negative gene-state runs count=1867 examples: NC_003197.2:[189,255) NC_003197.2:[336,373) NC_003197.2:[409,2799) NC_003197.2:[2800,3730) NC_003197.2:[3733,3926) NC_003197.2:[3992,5020) NC_003197.2:[7664,8618) NC_003197.2:[8728,9319) NC_003197.2:[11592,11902) NC_003197.2:[11986,13353)

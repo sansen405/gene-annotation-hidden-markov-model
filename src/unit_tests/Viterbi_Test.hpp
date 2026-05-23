@@ -94,6 +94,76 @@ namespace gene_hmm {
               }));
     }
 
+    static void test_viterbi_intron_body_min_length() {
+        cout << "\n[TEST 5] Intron body duration constraint gates acceptor exit\n";
+
+        Emission_Model model;
+        model.acceptor_window_left = 1;
+        model.acceptor_window_right = 0;
+        model.acceptor_lp.assign(1, {0.0, 0.0, 0.0, 0.0});
+
+        vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::A, Nucleotide::G};
+        auto transitions = make_viterbi_log_zero_matrix();
+
+        transitions[idx(State::START)][idx(State::INTRON_1)] = 0.0;
+        transitions[idx(State::INTRON_1)][idx(State::INTRON_1)] = 0.0;
+        transitions[idx(State::INTRON_1)][idx(State::ACCEPTOR_1)] = 0.0;
+        transitions[idx(State::ACCEPTOR_1)][idx(State::END)] = 0.0;
+
+        transitions[idx(State::START)][idx(State::INTERGENIC)] = log(0.01);
+        transitions[idx(State::INTERGENIC)][idx(State::INTERGENIC)] = log(0.01);
+        transitions[idx(State::INTERGENIC)][idx(State::END)] = log(0.01);
+
+        vector<State> allowed_path = Viterbi::decode(nucs, transitions, model, 2, 10);
+        vector<State> blocked_path = Viterbi::decode(nucs, transitions, model, 3, 10);
+
+        CHECK("acceptor exit is allowed when intron body meets minimum length",
+              allowed_path == vector<State>({State::INTRON_1, State::INTRON_1, State::ACCEPTOR_1}));
+        CHECK("acceptor exit is blocked when intron body is too short",
+              blocked_path == vector<State>(nucs.size(), State::INTERGENIC));
+    }
+
+    static void test_viterbi_gene_start_penalty() {
+        cout << "\n[TEST 6] Gene start penalty discourages intergenic gene entry\n";
+
+        Emission_Model model;
+        vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::A, Nucleotide::T, Nucleotide::G};
+        auto transitions = make_viterbi_log_zero_matrix();
+
+        transitions[idx(State::START)][idx(State::INTERGENIC)] = 0.0;
+        transitions[idx(State::INTERGENIC)][idx(State::INTERGENIC)] = log(0.8);
+        transitions[idx(State::INTERGENIC)][idx(State::START_CODON_1)] = log(0.9);
+        transitions[idx(State::START_CODON_1)][idx(State::START_CODON_2)] = log(0.9);
+        transitions[idx(State::START_CODON_2)][idx(State::START_CODON_3)] = log(0.9);
+        transitions[idx(State::START_CODON_3)][idx(State::END)] = log(0.9);
+        transitions[idx(State::INTERGENIC)][idx(State::END)] = log(0.8);
+
+        vector<State> unpenalized_path = Viterbi::decode(
+            nucs,
+            transitions,
+            model,
+            0,
+            numeric_limits<size_t>::max(),
+            0.0);
+        vector<State> penalized_path = Viterbi::decode(
+            nucs,
+            transitions,
+            model,
+            0,
+            numeric_limits<size_t>::max(),
+            5.0);
+
+        CHECK("unpenalized path enters a gene",
+              unpenalized_path == vector<State>({
+                  State::INTERGENIC,
+                  State::START_CODON_1,
+                  State::START_CODON_2,
+                  State::START_CODON_3
+              }));
+        CHECK("high gene start penalty keeps path intergenic",
+              penalized_path == vector<State>(nucs.size(), State::INTERGENIC));
+    }
+
     static void run_Viterbi_tests() {
         cout << "\nRunning Viterbi tests...\n";
 
@@ -101,6 +171,8 @@ namespace gene_hmm {
         test_viterbi_deterministic_start_codon_path();
         test_viterbi_intergenic_self_loop_path();
         test_viterbi_chooses_higher_scoring_path();
+        test_viterbi_intron_body_min_length();
+        test_viterbi_gene_start_penalty();
 
         cout << "\nDone.\n";
     }

@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -15,6 +17,8 @@ namespace {
 
 using namespace gene_hmm;
 using namespace std;
+
+Log_Prob gene_start_penalty = 1.0;
 
 struct Binary_Metrics {
     size_t tp = 0;
@@ -51,6 +55,12 @@ bool is_intron(State state) {
            state == State::ACCEPTOR_1 ||
            state == State::ACCEPTOR_2 ||
            state == State::ACCEPTOR_3;
+}
+
+bool is_intron_body(State state) {
+    return state == State::INTRON_1 ||
+           state == State::INTRON_2 ||
+           state == State::INTRON_3;
 }
 
 bool is_gene(State state) {
@@ -90,21 +100,57 @@ void add_metrics(Binary_Metrics& total, const Binary_Metrics& next) {
     total.tn += next.tn;
 }
 
-void print_binary_metrics(const string& label, const Binary_Metrics& metrics) {
+void print_binary_metrics_row(const string& label, const Binary_Metrics& metrics) {
     double precision = divide(metrics.tp, metrics.tp + metrics.fp);
     double recall = divide(metrics.tp, metrics.tp + metrics.fn);
     double accuracy = divide(metrics.tp + metrics.tn, metrics.tp + metrics.fp + metrics.fn + metrics.tn);
 
     cout << fixed << setprecision(4);
-    cout << label
-         << " precision=" << precision
-         << " recall=" << recall
-         << " f1=" << f1(precision, recall)
-         << " accuracy=" << accuracy
-         << " tp=" << metrics.tp
-         << " fp=" << metrics.fp
-         << " fn=" << metrics.fn
-         << " tn=" << metrics.tn << "\n";
+    cout << left << setw(12) << label
+         << right << setw(12) << precision
+         << setw(12) << recall
+         << setw(12) << f1(precision, recall)
+         << setw(12) << accuracy
+         << setw(10) << metrics.tp
+         << setw(10) << metrics.fp
+         << setw(10) << metrics.fn
+         << setw(10) << metrics.tn << "\n";
+}
+
+void print_binary_metrics_header() {
+    cout << left << setw(12) << "Label"
+         << right << setw(12) << "Precision"
+         << setw(12) << "Recall"
+         << setw(12) << "F1"
+         << setw(12) << "Accuracy"
+         << setw(10) << "TP"
+         << setw(10) << "FP"
+         << setw(10) << "FN"
+         << setw(10) << "TN" << "\n";
+}
+
+void print_boundary_metrics_row(
+    const string& label,
+    size_t exact,
+    size_t predicted,
+    size_t gold)
+{
+    cout << fixed << setprecision(4);
+    cout << left << setw(12) << label
+         << right << setw(12) << divide(exact, predicted)
+         << setw(12) << divide(exact, gold)
+         << setw(12) << exact
+         << setw(12) << predicted
+         << setw(12) << gold << "\n";
+}
+
+void print_boundary_metrics_header() {
+    cout << left << setw(12) << "Boundary"
+         << right << setw(12) << "Precision"
+         << setw(12) << "Recall"
+         << setw(12) << "Exact"
+         << setw(12) << "Predicted"
+         << setw(12) << "Gold" << "\n";
 }
 
 vector<Nucleotide> slice_nucleotides(
@@ -150,24 +196,78 @@ Emission_Model train_emissions(
             nucleotides,
             train_ranges,
             {State::EXON_FRAME_1, State::EXON_FRAME_2, State::EXON_FRAME_3}));
+    model.exon_frame_lp[0] = Emission_Model::compute_markov5_log_probs(
+        Emission_Model::count_markov5_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            {State::EXON_FRAME_1}));
+    model.exon_frame_lp[1] = Emission_Model::compute_markov5_log_probs(
+        Emission_Model::count_markov5_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            {State::EXON_FRAME_2}));
+    model.exon_frame_lp[2] = Emission_Model::compute_markov5_log_probs(
+        Emission_Model::count_markov5_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            {State::EXON_FRAME_3}));
 
-    model.donor_lp = Emission_Model::compute_pssm_log_probs(
+    auto start_targets = vector<State>{State::START_CODON_1};
+    model.start_codon_lp = Emission_Model::compute_pssm_log_odds(
         Emission_Model::count_pssm_emissions(
             states,
             nucleotides,
             train_ranges,
-            {State::DONOR_1, State::DONOR_2, State::DONOR_3},
+            start_targets,
+            model.start_window_left,
+            model.start_window_right),
+        Emission_Model::count_pssm_background_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            start_targets,
+            model.start_window_left,
+            model.start_window_right,
+            Splice_Signal::START_CODON));
+
+    auto donor_targets = vector<State>{State::DONOR_1, State::DONOR_2, State::DONOR_3};
+    model.donor_lp = Emission_Model::compute_pssm_log_odds(
+        Emission_Model::count_pssm_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            donor_targets,
             model.donor_window_left,
-            model.donor_window_right));
+            model.donor_window_right),
+        Emission_Model::count_pssm_background_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            donor_targets,
+            model.donor_window_left,
+            model.donor_window_right,
+            Splice_Signal::DONOR));
 
-    model.acceptor_lp = Emission_Model::compute_pssm_log_probs(
+    auto acceptor_targets = vector<State>{State::ACCEPTOR_1, State::ACCEPTOR_2, State::ACCEPTOR_3};
+    model.acceptor_lp = Emission_Model::compute_pssm_log_odds(
         Emission_Model::count_pssm_emissions(
             states,
             nucleotides,
             train_ranges,
-            {State::ACCEPTOR_1, State::ACCEPTOR_2, State::ACCEPTOR_3},
+            acceptor_targets,
             model.acceptor_window_left,
-            model.acceptor_window_right));
+            model.acceptor_window_right),
+        Emission_Model::count_pssm_background_emissions(
+            states,
+            nucleotides,
+            train_ranges,
+            acceptor_targets,
+            model.acceptor_window_left,
+            model.acceptor_window_right,
+            Splice_Signal::ACCEPTOR));
 
     return model;
 }
@@ -204,6 +304,39 @@ size_t count_exact_boundary_matches(
         }
     }
     return matches;
+}
+
+vector<size_t> collect_intron_body_lengths(
+    const vector<State>& states,
+    const vector<Chromosome_Range>& ranges)
+{
+    vector<size_t> lengths;
+    for (const auto& range : ranges) {
+        size_t i = range.start;
+        while (i < range.end) {
+            if (!is_intron_body(states[i])) {
+                i++;
+                continue;
+            }
+
+            size_t start = i;
+            while (i < range.end && is_intron_body(states[i])) {
+                i++;
+            }
+            lengths.push_back(i - start);
+        }
+    }
+    return lengths;
+}
+
+size_t percentile_length(vector<size_t> lengths, double percentile) {
+    if (lengths.empty()) {
+        return numeric_limits<size_t>::max();
+    }
+
+    sort(lengths.begin(), lengths.end());
+    size_t index = static_cast<size_t>(percentile * static_cast<double>(lengths.size() - 1));
+    return lengths[index];
 }
 
 vector<Interval> collect_intervals(
@@ -275,6 +408,18 @@ set<string> make_set(const vector<string>& values) {
     return set<string>(values.begin(), values.end());
 }
 
+vector<string> split_csv(const string& text) {
+    vector<string> values;
+    string token;
+    stringstream stream(text);
+    while (getline(stream, token, ',')) {
+        if (!token.empty()) {
+            values.push_back(token);
+        }
+    }
+    return values;
+}
+
 void print_state_family_counts(const string& label, const vector<State>& states) {
     cout << label
          << " intergenic=" << count_state(states, State::INTERGENIC)
@@ -329,7 +474,7 @@ void print_average_emission(
     cout << "\n";
 }
 
-Genome_Profile yeast_profile() {
+Genome_Profile default_profile() {
     Genome_Profile profile;
     profile.name = "yeast";
     profile.fasta_path = "genome_data/yeast_data/GCF_000146045.2_R64_genomic.fna";
@@ -350,6 +495,88 @@ Genome_Profile yeast_profile() {
     return profile;
 }
 
+void print_usage(const string& program_name) {
+    cerr << "Usage:\n";
+    cerr << "  " << program_name << "\n";
+    cerr << "  " << program_name << " --fasta PATH --gff PATH --test-chromosomes CHR[,CHR...] [options]\n\n";
+    cerr << "Options:\n";
+    cerr << "  --name NAME                         Dataset label for output\n";
+    cerr << "  --exclude-chromosomes CHR[,CHR...]  Chromosomes/contigs to ignore\n";
+    cerr << "  --transition-alpha VALUE            Transition smoothing alpha, default 0.02\n";
+    cerr << "  --emission-alpha VALUE              Emission smoothing alpha, default 0.1\n\n";
+    cerr << "Example:\n";
+    cerr << "  " << program_name
+         << " --name c_elegans"
+         << " --fasta genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.fna"
+         << " --gff genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.gff"
+         << " --test-chromosomes NC_003279.8\n";
+}
+
+Genome_Profile parse_args(int argc, char** argv) {
+    Genome_Profile profile = default_profile();
+
+    if (argc == 1) {
+        return profile;
+    }
+
+    profile.name = "custom";
+    profile.fasta_path.clear();
+    profile.gff_path.clear();
+    profile.test_chromosomes.clear();
+    profile.exclude_chromosomes.clear();
+    profile.transition_alpha = 0.02;
+    profile.emission_alpha = 0.1;
+    profile.emissions["INTERGENIC"] = {Emission_Family::MARKOV, 1, false, 0, 0};
+    profile.emissions["INTRON"] = {Emission_Family::MARKOV, 1, false, 0, 0};
+    profile.emissions["EXON_FRAME"] = {Emission_Family::MARKOV, 5, true, 0, 0};
+    profile.emissions["DONOR"] = {Emission_Family::PSSM, 1, false, 3, 6};
+    profile.emissions["ACCEPTOR"] = {Emission_Family::PSSM, 1, false, 15, 3};
+    profile.emissions["START_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
+    profile.emissions["STOP_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
+
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            exit(0);
+        }
+        if (i + 1 >= argc) {
+            cerr << "Missing value for argument: " << arg << "\n";
+            print_usage(argv[0]);
+            exit(1);
+        }
+
+        string value = argv[++i];
+        if (arg == "--name") {
+            profile.name = value;
+        } else if (arg == "--fasta") {
+            profile.fasta_path = value;
+        } else if (arg == "--gff") {
+            profile.gff_path = value;
+        } else if (arg == "--test-chromosomes") {
+            profile.test_chromosomes = split_csv(value);
+        } else if (arg == "--exclude-chromosomes") {
+            profile.exclude_chromosomes = split_csv(value);
+        } else if (arg == "--transition-alpha") {
+            profile.transition_alpha = stod(value);
+        } else if (arg == "--emission-alpha") {
+            profile.emission_alpha = stod(value);
+        } else {
+            cerr << "Unknown argument: " << arg << "\n";
+            print_usage(argv[0]);
+            exit(1);
+        }
+    }
+
+    if (profile.fasta_path.empty() || profile.gff_path.empty() || profile.test_chromosomes.empty()) {
+        cerr << "--fasta, --gff, and --test-chromosomes are required when passing custom arguments.\n";
+        print_usage(argv[0]);
+        exit(1);
+    }
+
+    return profile;
+}
+
 } // namespace
 
 namespace gene_hmm {
@@ -357,15 +584,9 @@ namespace gene_hmm {
 }
 
 int main(int argc, char** argv) {
-    if (argc > 1) {
-        cerr << "This standalone validator currently uses the built-in yeast profile defaults.\n";
-        cerr << "Usage: " << argv[0] << "\n";
-        return 1;
-    }
+    gene_hmm::profile = parse_args(argc, argv);
 
-    gene_hmm::profile = yeast_profile();
-
-    cout << "Loading built-in yeast validation profile\n";
+    cout << "Loading validation profile: " << gene_hmm::profile.name << "\n";
     cout << "FASTA: " << gene_hmm::profile.fasta_path << "\n";
     cout << "GFF: " << gene_hmm::profile.gff_path << "\n";
 
@@ -412,14 +633,8 @@ int main(int argc, char** argv) {
 
     auto transition_log_probs = Transition_Model::compute_log_probs(gold_states, train_ranges);
     Emission_Model emission_model = train_emissions(gold_states, nucleotides, train_ranges);
-
-    cout << "\nTraining diagnostics:\n";
-    print_state_family_counts("gold all chromosomes", gold_states);
-    print_log_prob("log P(EXON_FRAME_3 -> EXON_FRAME_1)", transition_log_probs[idx(State::EXON_FRAME_3)][idx(State::EXON_FRAME_1)]);
-    print_log_prob("log P(EXON_FRAME_3 -> DONOR_1)", transition_log_probs[idx(State::EXON_FRAME_3)][idx(State::DONOR_1)]);
-    print_log_prob("log P(EXON_FRAME_3 -> STOP_CODON_1)", transition_log_probs[idx(State::EXON_FRAME_3)][idx(State::STOP_CODON_1)]);
-    print_log_prob("log P(INTRON_1 -> INTRON_1)", transition_log_probs[idx(State::INTRON_1)][idx(State::INTRON_1)]);
-    print_log_prob("log P(INTRON_1 -> ACCEPTOR_1)", transition_log_probs[idx(State::INTRON_1)][idx(State::ACCEPTOR_1)]);
+    vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(gold_states, train_ranges);
+    size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
 
     Binary_Metrics coding_total;
     Binary_Metrics intron_total;
@@ -432,8 +647,6 @@ int main(int argc, char** argv) {
     size_t stop_predicted = 0;
     size_t stop_gold = 0;
     size_t stop_exact = 0;
-    vector<Interval> false_positive_intervals;
-    vector<Interval> false_negative_intervals;
     vector<Interval> predicted_gene_intervals;
     vector<Interval> gold_gene_intervals;
 
@@ -446,7 +659,13 @@ int main(int argc, char** argv) {
         vector<State> chromosome_gold =
             slice_states(gold_states, range.start, range.end);
         vector<State> chromosome_predicted =
-            Viterbi::decode(chromosome_nucleotides, transition_log_probs, emission_model);
+            Viterbi::decode(
+                chromosome_nucleotides,
+                transition_log_probs,
+                emission_model,
+                0,
+                max_intron_body_length,
+                gene_start_penalty);
 
         if (chromosome_predicted.size() != chromosome_gold.size()) {
             cerr << "Decoded path length mismatch on " << range.name << ".\n";
@@ -468,64 +687,33 @@ int main(int argc, char** argv) {
         stop_gold += count_state(chromosome_gold, State::STOP_CODON_1);
         stop_exact += count_exact_boundary_matches(chromosome_predicted, chromosome_gold, State::STOP_CODON_1);
 
-        vector<Interval> fp = collect_error_intervals(chromosome_predicted, chromosome_gold, range.name, true);
-        vector<Interval> fn = collect_error_intervals(chromosome_predicted, chromosome_gold, range.name, false);
         vector<Interval> pred_genes = collect_intervals(chromosome_predicted, range.name, is_gene);
         vector<Interval> gold_genes = collect_intervals(chromosome_gold, range.name, is_gene);
 
-        print_state_family_counts("gold " + range.name, chromosome_gold);
-        print_state_family_counts("predicted " + range.name, chromosome_predicted);
-        print_average_emission(
-            "gold exon emission magnitude " + range.name,
-            emission_model,
-            chromosome_nucleotides,
-            chromosome_gold,
-            {State::EXON_FRAME_1, State::EXON_FRAME_2, State::EXON_FRAME_3});
-        print_average_emission(
-            "gold donor PSSM emission magnitude " + range.name,
-            emission_model,
-            chromosome_nucleotides,
-            chromosome_gold,
-            {State::DONOR_1, State::DONOR_2, State::DONOR_3});
-        print_average_emission(
-            "gold acceptor PSSM emission magnitude " + range.name,
-            emission_model,
-            chromosome_nucleotides,
-            chromosome_gold,
-            {State::ACCEPTOR_1, State::ACCEPTOR_2, State::ACCEPTOR_3});
-
-        false_positive_intervals.insert(false_positive_intervals.end(), fp.begin(), fp.end());
-        false_negative_intervals.insert(false_negative_intervals.end(), fn.begin(), fn.end());
         predicted_gene_intervals.insert(predicted_gene_intervals.end(), pred_genes.begin(), pred_genes.end());
         gold_gene_intervals.insert(gold_gene_intervals.end(), gold_genes.begin(), gold_genes.end());
     }
 
     cout << "\n=== Full Genome Holdout Validation ===\n";
-    cout << "evaluated bases=" << total_bases << "\n";
-    cout << "exact 21-state accuracy=" << divide(exact_matches, total_bases) << "\n";
-    print_binary_metrics("coding", coding_total);
-    print_binary_metrics("intron", intron_total);
+    cout << fixed << setprecision(4);
+    cout << left << setw(28) << "Metric" << right << setw(14) << "Value" << "\n";
+    cout << left << setw(28) << "Evaluated bases" << right << setw(14) << total_bases << "\n";
+    cout << left << setw(28) << "Exact 21-state accuracy" << right << setw(14) << divide(exact_matches, total_bases) << "\n";
+    cout << left << setw(28) << "Illegal transitions" << right << setw(14) << illegal_transitions << "\n";
+    cout << left << setw(28) << "Predicted gene intervals" << right << setw(14) << predicted_gene_intervals.size() << "\n";
+    cout << left << setw(28) << "Gold gene intervals" << right << setw(14) << gold_gene_intervals.size() << "\n";
+    cout << left << setw(28) << "Intron length cap p95" << right << setw(14) << max_intron_body_length << "\n";
+    cout << left << setw(28) << "Gene start penalty" << right << setw(14) << gene_start_penalty << "\n";
 
-    cout << "\nBoundary metrics:\n";
-    cout << "start exact_matches=" << start_exact
-         << " predicted=" << start_predicted
-         << " gold=" << start_gold
-         << " precision=" << divide(start_exact, start_predicted)
-         << " recall=" << divide(start_exact, start_gold) << "\n";
-    cout << "stop exact_matches=" << stop_exact
-         << " predicted=" << stop_predicted
-         << " gold=" << stop_gold
-         << " precision=" << divide(stop_exact, stop_predicted)
-         << " recall=" << divide(stop_exact, stop_gold) << "\n";
+    cout << "\nClassification Metrics:\n";
+    print_binary_metrics_header();
+    print_binary_metrics_row("coding", coding_total);
+    print_binary_metrics_row("intron", intron_total);
 
-    cout << "\nStructure:\n";
-    cout << "illegal predicted transitions=" << illegal_transitions << "\n";
-    print_intervals("predicted gene intervals", predicted_gene_intervals, 5);
-    print_intervals("gold gene intervals", gold_gene_intervals, 5);
-
-    cout << "\nError examples:\n";
-    print_intervals("false-positive gene-state runs", false_positive_intervals, 10);
-    print_intervals("false-negative gene-state runs", false_negative_intervals, 10);
+    cout << "\nBoundary Metrics:\n";
+    print_boundary_metrics_header();
+    print_boundary_metrics_row("start", start_exact, start_predicted, start_gold);
+    print_boundary_metrics_row("stop", stop_exact, stop_predicted, stop_gold);
 
     return 0;
 }

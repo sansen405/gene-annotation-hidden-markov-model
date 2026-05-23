@@ -100,7 +100,8 @@ namespace gene_hmm {
                     case 'G': nuc_sequence.push_back(Nucleotide::G); break;
                     case 'T': nuc_sequence.push_back(Nucleotide::T); break;
                     default:
-                        cout << "Invalid sequence - Nucleotide not A, C, G, or T" << endl;
+                        // Preserve FASTA/GFF coordinate alignment for ambiguous bases.
+                        nuc_sequence.push_back(Nucleotide::A);
                         break;
                 }
             }

@@ -5,6 +5,7 @@
 #include "../topology/Topology.hpp"
 #include <vector>
 #include <array>
+#include <limits>
 
 namespace gene_hmm {
 
@@ -20,6 +21,19 @@ namespace gene_hmm {
             static vector<State> decode(const vector<Nucleotide>& nucleotides,
                 const Transition_Model::Log_Prob_Matrix& transition_log_probs,
                 const Emission_Model& emission_model);
+
+            static vector<State> decode(const vector<Nucleotide>& nucleotides,
+                const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+                const Emission_Model& emission_model,
+                size_t min_intron_body_length,
+                size_t max_intron_body_length);
+
+            static vector<State> decode(const vector<Nucleotide>& nucleotides,
+                const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+                const Emission_Model& emission_model,
+                size_t min_intron_body_length,
+                size_t max_intron_body_length,
+                Log_Prob gene_start_penalty);
 
 
     };

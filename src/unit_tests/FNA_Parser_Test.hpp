@@ -17,7 +17,7 @@ namespace gene_hmm {
     static void write_fna_fixture() {
         ofstream file(FNA_TEST_PATH);
         file << ">chr1 first chromosome\n";
-        file << "ACgt\n";
+        file << "ACgtN\n";
         file << "TA\n";
         file << ">chr2 second chromosome\n";
         file << "ccGG\n";
@@ -33,7 +33,7 @@ namespace gene_hmm {
         vector<Nucleotide> seq = FNA_Parser::parse_sequence(FNA_TEST_PATH);
         vector<Nucleotide> expected = {
             Nucleotide::A, Nucleotide::C, Nucleotide::G, Nucleotide::T,
-            Nucleotide::T, Nucleotide::A, Nucleotide::C, Nucleotide::C,
+            Nucleotide::A, Nucleotide::T, Nucleotide::A, Nucleotide::C, Nucleotide::C,
             Nucleotide::G, Nucleotide::G
         };
 
@@ -45,7 +45,7 @@ namespace gene_hmm {
         cout << "\n[TEST 2] Sequence length ignores headers\n";
 
         size_t length = FNA_Parser::get_sequence_length(FNA_TEST_PATH);
-        CHECK("sequence length counts only base characters", length == 10);
+        CHECK("sequence length counts only base characters", length == 11);
     }
 
     static void test_fna_chromosome_offsets() {
@@ -54,7 +54,7 @@ namespace gene_hmm {
         auto offsets = FNA_Parser::get_chromosome_offsets(FNA_TEST_PATH);
         CHECK("two chromosome offsets parsed", offsets.size() == 2);
         CHECK("chr1 starts at global offset 0", offsets["chr1"] == 0);
-        CHECK("chr2 starts after chr1 bases", offsets["chr2"] == 6);
+        CHECK("chr2 starts after chr1 bases", offsets["chr2"] == 7);
     }
 
     static void test_fna_chromosome_ranges() {
@@ -64,8 +64,8 @@ namespace gene_hmm {
         CHECK("two chromosome ranges parsed", ranges.size() == 2);
 
         if (ranges.size() == 2) {
-            CHECK("chr1 range is [0, 6)", ranges[0].name == "chr1" && ranges[0].start == 0 && ranges[0].end == 6);
-            CHECK("chr2 range is [6, 10)", ranges[1].name == "chr2" && ranges[1].start == 6 && ranges[1].end == 10);
+            CHECK("chr1 range is [0, 7)", ranges[0].name == "chr1" && ranges[0].start == 0 && ranges[0].end == 7);
+            CHECK("chr2 range is [7, 11)", ranges[1].name == "chr2" && ranges[1].start == 7 && ranges[1].end == 11);
         }
     }
 

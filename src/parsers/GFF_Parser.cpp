@@ -246,7 +246,6 @@ namespace gene_hmm {
         if(is_illegal_transition)
             for(size_t i = most_recent_intergenic+1; i < state_sequence.size(); i++)
                 state_sequence[i] = State::INTERGENIC;
-        cout << "Number of illegal transitions: " << num_illegal_transitions << endl;
 
         //return cleaned state sequence to be used in transition and emission model training
         return state_sequence;

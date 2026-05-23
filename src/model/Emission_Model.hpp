@@ -23,6 +23,12 @@ namespace gene_hmm {
         DETERMINISTIC,         // START_CODON_*, STOP_CODON_*
     };
 
+    enum class Splice_Signal {
+        DONOR,
+        ACCEPTOR,
+        START_CODON,
+    };
+
     class Emission_Model {
     public:
         //nuc is short for nucleotide
@@ -35,19 +41,24 @@ namespace gene_hmm {
 
         //Markov1_Log_Prob[context_nuc][emitted_nuc]   = log P(nuc | context_nuc)
         //Markov5_Log_Prob[5mer_index][emitted_nuc]    = log P(nuc | 5mer_context)
-        //PSSM_Log_Prob[window_position][emitted_nuc]  = log P(nuc | position)
+        //PSSM_Log_Prob[window_position][emitted_nuc]  = log-odds P_site(nuc | position) / P_background(nuc | position)
         using Markov1_Log_Prob = array<array<Log_Prob, NUM_NUCLEOTIDES>, NUM_NUCLEOTIDES>;
         using Markov5_Log_Prob = array<array<Log_Prob, NUM_NUCLEOTIDES>, MARKOV5_CONTEXTS>;
+        using Frame_Markov5_Log_Prob = array<Markov5_Log_Prob, 3>;
         using PSSM_Log_Prob    = vector<array<Log_Prob, NUM_NUCLEOTIDES>>;
 
         //Trained probability tables (one per state family)
         Markov1_Log_Prob intergenic_lp{};
         Markov1_Log_Prob intron_lp{};
         Markov5_Log_Prob exon_lp{};
+        Frame_Markov5_Log_Prob exon_frame_lp{};
+        PSSM_Log_Prob    start_codon_lp;
         PSSM_Log_Prob    donor_lp;
         PSSM_Log_Prob    acceptor_lp;
 
         //PSSM window sizes (hardcoded for now)
+        size_t start_window_left;
+        size_t start_window_right;
         size_t donor_window_left;
         size_t donor_window_right;
         size_t acceptor_window_left;
@@ -86,10 +97,21 @@ namespace gene_hmm {
             size_t window_left,
             size_t window_right);
 
+        //(1D) Count matched non-splice motif windows for PSSM background
+        static PSSM_Count count_pssm_background_emissions(
+            const vector<State>& states,
+            const vector<Nucleotide>& nucleotides,
+            const vector<Chromosome_Range>& chromosomes,
+            const vector<State>& target_states,
+            size_t window_left,
+            size_t window_right,
+            Splice_Signal signal);
+
         //(2) Compute log probability matrices from counts
         static Markov1_Log_Prob compute_markov1_log_probs(const Markov1_Count& counts);
         static Markov5_Log_Prob compute_markov5_log_probs(const Markov5_Count& counts);
         static PSSM_Log_Prob    compute_pssm_log_probs(const PSSM_Count& counts);
+        static PSSM_Log_Prob    compute_pssm_log_odds(const PSSM_Count& site_counts, const PSSM_Count& background_counts);
 
         //(3) Return log P(nuc | state) for deterministic states (START/STOP codons)
         static Log_Prob get_deterministic_log_prob(State state, Nucleotide nuc);
