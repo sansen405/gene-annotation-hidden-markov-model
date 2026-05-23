@@ -90,16 +90,16 @@ Emission summary:
 `Viterbi` decodes the best state path. The validation runner uses the extended
 decoder overload with an intron body length cap and a gene-start penalty.
 
+### `genome_data/`
+Source FASTA and GFF for *Saccharomyces cerevisiae* S288C
+(RefSeq assembly `GCF_000146045.2`, R64). Referenced from `yeast.json`.
+
 ### `src/genome_profiles/`
 JSON files that fully describe a training/decoding run for one organism:
 input paths, held-out test chromosomes, gene-quality filters, per-state
 emission model choices, and smoothing hyperparameters.
 
 Example: [`src/genome_profiles/yeast.json`](src/genome_profiles/yeast.json).
-
-### `genome_data/`
-Source FASTA and GFF for *Saccharomyces cerevisiae* S288C
-(RefSeq assembly `GCF_000146045.2`, R64). Referenced from `yeast.json`.
 
 ## Genome Profile Schema
 
