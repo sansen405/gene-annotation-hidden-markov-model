@@ -12,6 +12,10 @@ filters, emission models, smoothing) is driven by a JSON profile in
 ```text
 Gene_Analysis_HMM/
 ├── README.md
+├── Dockerfile                     # multi-stage: C++ build → python:3.11-slim API image
+├── docker-compose.yml
+├── train_model.cpp                # CLI: train HMM from a genome profile → model JSON
+├── annotate.cpp                   # CLI: load model JSON + FASTA → gene annotation JSON
 ├── .vscode/
 │   └── settings.json
 ├── src/
@@ -26,12 +30,20 @@ Gene_Analysis_HMM/
 │   │   ├── Transition_Model.hpp   # bigram counts -> log-prob transition matrix
 │   │   ├── Transition_Model.cpp
 │   │   ├── Emission_Model.hpp     # emission counts -> log-prob emission tables
-│   │   └── Emission_Model.cpp
+│   │   ├── Emission_Model.cpp
+│   │   ├── Model_IO.hpp           # save/load trained model as JSON
+│   │   └── Model_IO.cpp
 │   ├── decoding/
 │   │   ├── Viterbi.hpp
 │   │   └── Viterbi.cpp
 │   └── genome_profiles/
 │       └── yeast.json             # S. cerevisiae S288C (RefSeq GCF_000146045.2)
+├── api/
+│   ├── main.py                    # FastAPI app (three endpoints)
+│   └── requirements.txt
+├── models/                        # pre-trained model JSON files (one per genome)
+├── scripts/
+│   └── train_all_models.sh        # build binaries + train all genome profiles locally
 ├── validation/
 │   ├── full_genome_validation.cpp # train/test holdout validation runner
 │   └── diagnostics/               # extra boundary and intron diagnostics
@@ -58,6 +70,9 @@ Defines the shared vocabulary used across the project:
   (regions, then HMM states) aligned to the FASTA.
 
 ### `src/model/`
+- **`Model_IO`** — serialises a fully trained HMM (transition matrix, all emission
+  tables, intron length cap, gene-start penalty) to a compact JSON file (~574 KB
+  for yeast) and loads it back without re-training.
 - **`Transition_Model`** — given the per-base state vector and chromosome
   ranges, counts bigram transitions, computes row sums, and produces a
   log-probability transition matrix with additive (`alpha`) smoothing.
@@ -188,6 +203,104 @@ Run validation on a custom genome:
   --gff genome_data/aspergillus_data/GCF_000149205.2_ASM14920v2_genomic.gff \
   --test-chromosomes NT_107008.1
 ```
+
+## Serving (FastAPI + Docker)
+
+The model can be packaged as a REST API. Pre-trained models are stored inside
+the container; callers POST a genome name and a FASTA file and receive a
+per-chromosome gene annotation in JSON.
+
+### Components
+
+- **`src/model/Model_IO`** — saves/loads the full trained HMM to a JSON file so
+  no re-training is needed at inference time.
+- **`train_model.cpp`** — offline CLI that reads a genome profile, trains the
+  HMM, and writes a `{name}_model.json` to `models/`.
+- **`annotate.cpp`** — inference CLI that loads a saved model JSON, runs Viterbi
+  on every chromosome in the supplied FASTA, and writes gene structures (exons,
+  introns, boundaries) as JSON to stdout.
+- **`api/main.py`** — FastAPI application that wraps `annotate` via subprocess
+  and exposes three endpoints:
+  - `GET /health` — liveness check; lists available genome models.
+  - `GET /genomes` — returns names of all pre-trained models in `models/`.
+  - `POST /annotate` — form fields: `genome` (str) and `fna` (file upload).
+- **`Dockerfile`** — two-stage build: Ubuntu + clang compiles the C++ binaries;
+  `python:3.11-slim` runs the FastAPI app with the model files baked in.
+- **`docker-compose.yml`** — mounts `./models` as a read-only volume so models
+  can be updated without rebuilding the image.
+
+### Workflow
+
+**Step 1 — train models locally** (requires genome data in `genome_data/`):
+
+```sh
+./scripts/train_all_models.sh
+# → models/yeast_model.json  (~574 KB)
+```
+
+Or train a single genome manually:
+
+```sh
+clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
+  train_model.cpp \
+  src/model/Transition_Model.cpp \
+  src/model/Emission_Model.cpp \
+  src/model/Model_IO.cpp \
+  src/genome_profiles/Genome_Profile.cpp \
+  src/parsers/FNA_Parser.cpp \
+  src/parsers/GFF_Parser.cpp \
+  -o train_model
+
+./train_model \
+  --profile src/genome_profiles/yeast.json \
+  --output  models/yeast_model.json
+```
+
+**Step 2 — build and run the container:**
+
+```sh
+docker compose build
+docker compose up
+```
+
+**Step 3 — call the API:**
+
+```sh
+# List available genome models
+curl http://localhost:8000/genomes
+
+# Annotate a FASTA file
+curl -X POST http://localhost:8000/annotate \
+  -F "genome=yeast" \
+  -F "fna=@my_genome.fna"
+```
+
+### Annotation response format
+
+```json
+{
+  "genome": "yeast",
+  "chromosomes": [
+    {
+      "name": "NC_001133.9",
+      "length": 230218,
+      "genes": [
+        {
+          "id": "gene_1",
+          "start": 1806,
+          "end": 2169,
+          "exons":   [{ "start": 1806, "end": 2169 }],
+          "introns": []
+        }
+      ]
+    }
+  ],
+  "summary": { "total_genes": 62, "total_chromosomes": 1 }
+}
+```
+
+Coordinates are 0-based, half-open (`[start, end)`), relative to the start of
+each chromosome in the input FASTA.
 
 ## Recent Model Fixes (1.1)
 
