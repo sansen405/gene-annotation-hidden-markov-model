@@ -1,0 +1,18 @@
+services:
+  gene-annotation-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the local models directory so you can add/update models without
+      # rebuilding the image. Remove this volume to use only the baked-in models.
+      - ./models:/app/models:ro
+    environment:
+      - MODELS_DIR=/app/models
+      - ANNOTATE_BIN=/usr/local/bin/annotate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
