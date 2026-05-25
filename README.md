@@ -44,6 +44,7 @@ Gene_Analysis_HMM/
 │   ├── full_genome_validation.cpp # train/test holdout validation runner
 │   └── diagnostics/               # extra boundary and intron diagnostics
 ├── src/tools/
+│   ├── predict_fna.cpp            # JSON prediction CLI for uploaded .fna input
 │   └── split_genome_data.cpp      # writes train/test FASTA+GFF from a profile
 └── genome_data/
     └── yeast/
@@ -241,6 +242,9 @@ npm run dev:all
 
 Open the Vite URL printed by the terminal, usually
 `http://localhost:5173/`. The local API listens on `http://localhost:5174/`.
+
+The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
+`src/tools/predict_fna.cpp` (`--fna PATH --profile PATH`).
 
 ## Recent Model Fixes (1.3)
 

@@ -47,6 +47,12 @@ bool is_intron(State state) {
            state == State::ACCEPTOR_3;
 }
 
+bool is_intron_body(State state) {
+    return state == State::INTRON_1 ||
+           state == State::INTRON_2 ||
+           state == State::INTRON_3;
+}
+
 bool is_gene(State state) {
     return is_coding(state) || is_intron(state);
 }
@@ -309,6 +315,12 @@ void add_predictions_for_range(
         prediction["end"] = gene_end;
         prediction["exons"] = intervals_for_family(chromosome_states, 0, gene_start, gene_end, is_coding);
         prediction["introns"] = intervals_for_family(chromosome_states, 0, gene_start, gene_end, is_intron);
+        prediction["intron_count"] = intervals_for_family(
+            chromosome_states,
+            0,
+            gene_start,
+            gene_end,
+            is_intron_body).size();
         prediction["sequence"] = sequence_preview(chromosome_nucleotides, gene_start, gene_end);
         prediction["confidence"] = confidence_for_range(chromosome_states, chromosome_confidence, 0, gene_start, gene_end);
 
@@ -333,10 +345,10 @@ namespace gene_hmm {
 
 int main(int argc, char** argv) {
     try {
-        string input_fasta = value_after_arg(argc, argv, "--fasta", "");
+        string input_fna = value_after_arg(argc, argv, "--fna", "");
         string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/yeast.json");
-        if(input_fasta.empty()){
-            throw runtime_error("--fasta PATH is required.");
+        if(input_fna.empty()){
+            throw runtime_error("--fna PATH is required.");
         }
 
         gene_hmm::profile = Genome_Profile::load(profile_path);
@@ -355,12 +367,12 @@ int main(int argc, char** argv) {
         auto transition_log_probs = Transition_Model::compute_log_probs(training_states, train_ranges);
         Emission_Model emission_model = train_emissions(training_states, training_nucleotides, train_ranges);
 
-        vector<Nucleotide> input_nucleotides = FNA_Parser::parse_sequence(input_fasta);
-        vector<Chromosome_Range> input_ranges = FNA_Parser::get_chromosome_ranges(input_fasta);
+        vector<Nucleotide> input_nucleotides = FNA_Parser::parse_sequence(input_fna);
+        vector<Chromosome_Range> input_ranges = FNA_Parser::get_chromosome_ranges(input_fna);
 
         json result;
         result["summary"] = {
-            {"inputFile", input_fasta.substr(input_fasta.find_last_of("/\\") + 1)},
+            {"inputFile", input_fna.substr(input_fna.find_last_of("/\\") + 1)},
             {"totalBases", input_nucleotides.size()},
             {"scaffolds", input_ranges.size()},
             {"genes", 0},
@@ -411,7 +423,7 @@ int main(int argc, char** argv) {
         size_t intron_count = 0;
         for(const auto& prediction : result["predictions"]){
             exon_count += prediction["exons"].size();
-            intron_count += prediction["introns"].size();
+            intron_count += prediction["intron_count"].get<size_t>();
         }
         result["summary"]["genes"] = result["predictions"].size();
         result["summary"]["exons"] = exon_count;

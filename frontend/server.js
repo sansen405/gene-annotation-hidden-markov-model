@@ -13,7 +13,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const localDataDir = path.join(__dirname, "local_data");
 const uploadDir = path.join(localDataDir, "uploads");
 const binDir = path.join(localDataDir, "bin");
-const predictorBin = path.join(binDir, "hmm_predict_fasta");
+const predictorBin = path.join(binDir, "hmm_predict_fna");
 
 fs.mkdirSync(uploadDir, { recursive: true });
 fs.mkdirSync(binDir, { recursive: true });
@@ -40,7 +40,7 @@ function execFilePromise(command, args, options = {}) {
 
 async function ensurePredictorBuilt() {
   const sources = [
-    "src/tools/predict_fasta.cpp",
+    "src/tools/predict_fna.cpp",
     "src/decoding/Viterbi.cpp",
     "src/decoding/Forward_Backward.cpp",
     "src/model/Transition_Model.cpp",
@@ -62,7 +62,7 @@ async function ensurePredictorBuilt() {
       "-std=c++17",
       "-Isrc",
       "-I/opt/homebrew/include",
-      "src/tools/predict_fasta.cpp",
+      "src/tools/predict_fna.cpp",
       "src/decoding/Viterbi.cpp",
       "src/decoding/Forward_Backward.cpp",
       "src/model/Transition_Model.cpp",
@@ -202,7 +202,7 @@ app.post("/api/predict", upload.single("file"), async (req, res) => {
     const { stdout } = await execFilePromise(
       predictorBin,
       [
-        "--fasta",
+        "--fna",
         req.file.path,
         "--profile",
         path.join(repoRoot, "src/genome_profiles/yeast.json"),
