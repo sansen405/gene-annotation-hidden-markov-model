@@ -1,0 +1,29 @@
+Loading validation profile: c_elegans
+FASTA: genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.fna
+GFF: genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.gff
+Training chromosomes: 6
+Evaluation chromosomes: 1
+Usable training intervals: 9847
+Usable evaluation intervals: 1552
+
+Decoding usable evaluation intervals
+
+=== Full Genome Holdout Validation ===
+Metric                               Value
+Evaluated bases                   10112664
+Exact 21-state accuracy             0.7995
+Illegal transitions                      0
+Predicted gene intervals              2185
+Gold gene intervals                   1434
+Intron length cap p95                 1111
+Gene start penalty                  1.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.7759      0.9512      0.8547      0.9410   1754319    506628     90018   7761699
+intron            0.7791      0.6852      0.7291      0.8627   1868630    529912    858455   6855667
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.3977      0.6060         869        2185        1434
+stop              0.4879      0.7434        1066        2185        1434

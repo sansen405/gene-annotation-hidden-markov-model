@@ -18,12 +18,23 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 .app-shell {
@@ -141,6 +152,12 @@ button {
   gap: 2px;
   margin-left: 18px;
   padding: 5px 0 5px 8px;
+}
+
+.empty-runs {
+  color: #6b7280;
+  font-size: 12px;
+  margin: 8px 8px 10px;
 }
 
 .saved-run {
@@ -313,6 +330,27 @@ button {
   gap: 10px;
 }
 
+.selectable-file-row {
+  cursor: pointer;
+  margin: 0;
+}
+
+.selectable-file-row:hover {
+  background: #f0f6ff;
+}
+
+.selectable-file-row input {
+  accent-color: #0b62d8;
+  height: 16px;
+  width: 16px;
+}
+
+.file-summary-note {
+  color: #4b5563;
+  font-size: 12px;
+  margin: 10px 16px 12px;
+}
+
 .summary-grid {
   display: grid;
 }
@@ -392,6 +430,15 @@ button {
   font-weight: 700;
 }
 
+.error-message {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 13px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+}
+
 .elapsed {
   display: grid;
   gap: 5px;
@@ -447,6 +494,13 @@ button {
   padding: 6px 9px;
 }
 
+.viewer-controls select {
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  height: 32px;
+  padding: 6px 9px;
+}
+
 .small-primary {
   background: #0b62d8;
   border: 0;
@@ -481,6 +535,28 @@ button {
   padding: 14px 10px 10px;
 }
 
+.track-interactive {
+  position: relative;
+}
+
+
+.range-selection {
+  background: rgba(7, 91, 216, 0.14);
+  border: 1px solid rgba(7, 91, 216, 0.55);
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 2;
+}
+
+.track-hint {
+  color: #6b7280;
+  font-size: 11px;
+  margin: 6px 0 0;
+  text-align: center;
+}
+
 .axis-labels {
   color: #6b7280;
   display: flex;
@@ -489,8 +565,12 @@ button {
   margin-bottom: 4px;
 }
 
-.gene-track {
+.track-interactive .gene-track {
+  cursor: crosshair;
+  display: block;
   height: 90px;
+  touch-action: none;
+  user-select: none;
   width: 100%;
 }
 
@@ -644,6 +724,10 @@ button {
   padding: 12px 14px 12px 0;
 }
 
+.confidence-chart.grouped {
+  height: 170px;
+}
+
 .confidence-y-axis {
   color: #6b7280;
   display: flex;
@@ -663,6 +747,35 @@ button {
   padding: 0 0 0 4px;
 }
 
+.confidence-bars.grouped-bars {
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.confidence-group {
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: end;
+  min-width: 54px;
+}
+
+.confidence-group .confidence-bar {
+  flex: unset;
+  min-height: 4px;
+}
+
+.confidence-group span {
+  color: #4b5563;
+  font-size: 10px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .confidence-bar {
   background: #d8dee9;
   border-radius: 2px 2px 0 0;
@@ -671,6 +784,10 @@ button {
 }
 
 .confidence-bar.exon {
+  background: #075bd8;
+}
+
+.confidence-bar.utr {
   background: #075bd8;
 }
 
@@ -706,15 +823,85 @@ button {
 }
 
 .results-grid {
-  align-items: start;
+  align-items: stretch;
   display: grid;
   gap: 24px;
   grid-template-columns: minmax(0, 1fr) 300px;
 }
 
+.empty-results {
+  align-items: center;
+  color: #4b5563;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-height: 220px;
+  text-align: center;
+}
+
+.empty-results h2 {
+  color: #111827;
+  margin: 0;
+}
+
+.empty-results p {
+  margin: 0;
+}
+
 .table-card,
 .selected-card {
+  display: flex;
+  flex-direction: column;
   min-height: 260px;
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.table-card table {
+  font-size: 12px;
+}
+
+.table-card th,
+.table-card td {
+  padding: 7px 8px;
+}
+
+.table-pagination {
+  align-items: center;
+  border-top: 1px solid #e5e7eb;
+  color: #4b5563;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.pagination-controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.pagination-controls button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.pagination-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .table-header {
@@ -832,7 +1019,8 @@ pre {
   grid-template-columns: repeat(4, 1fr);
 }
 
-.export-options label {
+.export-options label,
+.export-options a {
   align-items: center;
   background: #f8fafc;
   border: 1px solid #d8dee9;
@@ -848,7 +1036,8 @@ pre {
   margin-top: 18px;
 }
 
-.export-actions button {
+.export-actions button,
+.export-actions a {
   align-items: center;
   background: #ffffff;
   border: 1px solid #cbd5e1;

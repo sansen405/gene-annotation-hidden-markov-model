@@ -21,10 +21,14 @@ namespace gene_hmm {
     struct Genome_Profile {
         string name;
 
-        string fasta_path;
-        string gff_path;
+        string source_fasta_path;
+        string source_gff_path;
+        string train_fasta_path;
+        string train_gff_path;
+        string test_fasta_path;
+        string test_gff_path;
         vector<string> test_chromosomes;
-        vector<string> exclude_chromosomes;
+        vector<string> excluded_chromosomes;
 
         size_t min_first_cds_bp;
         size_t min_last_cds_bp;

@@ -404,10 +404,6 @@ void print_intervals(const string& label, const vector<Interval>& intervals, siz
     cout << "\n";
 }
 
-set<string> make_set(const vector<string>& values) {
-    return set<string>(values.begin(), values.end());
-}
-
 vector<string> split_csv(const string& text) {
     vector<string> values;
     string token;
@@ -418,6 +414,37 @@ vector<string> split_csv(const string& text) {
         }
     }
     return values;
+}
+
+bool is_usable_region(int region) {
+    return region != GFF_Parser::IGNORED_REGION;
+}
+
+vector<Chromosome_Range> split_usable_ranges(
+    const vector<Chromosome_Range>& ranges,
+    const vector<int>& regions)
+{
+    vector<Chromosome_Range> usable_ranges;
+
+    for (const auto& range : ranges) {
+        size_t pos = range.start;
+        while (pos < range.end) {
+            while (pos < range.end && !is_usable_region(regions[pos])) {
+                pos++;
+            }
+            if (pos >= range.end) {
+                break;
+            }
+
+            size_t start = pos;
+            while (pos < range.end && is_usable_region(regions[pos])) {
+                pos++;
+            }
+            usable_ranges.push_back({range.name, start, pos});
+        }
+    }
+
+    return usable_ranges;
 }
 
 void print_state_family_counts(const string& label, const vector<State>& states) {
@@ -475,15 +502,19 @@ void print_average_emission(
 }
 
 Genome_Profile default_profile() {
+    return Genome_Profile::load("src/genome_profiles/yeast.json");
+}
+
+Genome_Profile manual_profile() {
     Genome_Profile profile;
-    profile.name = "yeast";
-    profile.fasta_path = "genome_data/yeast_data/GCF_000146045.2_R64_genomic.fna";
-    profile.gff_path = "genome_data/yeast_data/genomic.gff";
-    profile.test_chromosomes = {"NC_001148.4"};
-    profile.exclude_chromosomes = {"NC_001224.1"};
+    profile.name = "custom";
+    profile.min_first_cds_bp = 3;
+    profile.min_last_cds_bp = 3;
+    profile.min_intron_bp = 20;
+    profile.require_3n_cds = true;
+    profile.include_minus_strand = false;
     profile.transition_alpha = 0.02;
     profile.emission_alpha = 0.1;
-
     profile.emissions["INTERGENIC"] = {Emission_Family::MARKOV, 1, false, 0, 0};
     profile.emissions["INTRON"] = {Emission_Family::MARKOV, 1, false, 0, 0};
     profile.emissions["EXON_FRAME"] = {Emission_Family::MARKOV, 5, true, 0, 0};
@@ -491,48 +522,34 @@ Genome_Profile default_profile() {
     profile.emissions["ACCEPTOR"] = {Emission_Family::PSSM, 1, false, 15, 3};
     profile.emissions["START_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
     profile.emissions["STOP_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
-
     return profile;
 }
 
 void print_usage(const string& program_name) {
     cerr << "Usage:\n";
     cerr << "  " << program_name << "\n";
-    cerr << "  " << program_name << " --fasta PATH --gff PATH --test-chromosomes CHR[,CHR...] [options]\n\n";
+    cerr << "  " << program_name << " --profile PATH\n";
+    cerr << "  " << program_name
+         << " --train-fasta PATH --train-gff PATH --test-fasta PATH --test-gff PATH [options]\n\n";
     cerr << "Options:\n";
-    cerr << "  --name NAME                         Dataset label for output\n";
-    cerr << "  --exclude-chromosomes CHR[,CHR...]  Chromosomes/contigs to ignore\n";
-    cerr << "  --transition-alpha VALUE            Transition smoothing alpha, default 0.02\n";
-    cerr << "  --emission-alpha VALUE              Emission smoothing alpha, default 0.1\n\n";
+    cerr << "  --name NAME              Dataset label for output\n";
+    cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
+    cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n\n";
     cerr << "Example:\n";
     cerr << "  " << program_name
          << " --name c_elegans"
-         << " --fasta genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.fna"
-         << " --gff genome_data/c_elegans_data/GCF_000002985.6_WBcel235_genomic.gff"
-         << " --test-chromosomes NC_003279.8\n";
+         << " --train-fasta genome_data/c_elegans/train/c_elegans_train.fna"
+         << " --train-gff genome_data/c_elegans/train/c_elegans_train.gff"
+         << " --test-fasta genome_data/c_elegans/test/c_elegans_test.fna"
+         << " --test-gff genome_data/c_elegans/test/c_elegans_test.gff\n";
 }
 
 Genome_Profile parse_args(int argc, char** argv) {
-    Genome_Profile profile = default_profile();
-
     if (argc == 1) {
-        return profile;
+        return default_profile();
     }
 
-    profile.name = "custom";
-    profile.fasta_path.clear();
-    profile.gff_path.clear();
-    profile.test_chromosomes.clear();
-    profile.exclude_chromosomes.clear();
-    profile.transition_alpha = 0.02;
-    profile.emission_alpha = 0.1;
-    profile.emissions["INTERGENIC"] = {Emission_Family::MARKOV, 1, false, 0, 0};
-    profile.emissions["INTRON"] = {Emission_Family::MARKOV, 1, false, 0, 0};
-    profile.emissions["EXON_FRAME"] = {Emission_Family::MARKOV, 5, true, 0, 0};
-    profile.emissions["DONOR"] = {Emission_Family::PSSM, 1, false, 3, 6};
-    profile.emissions["ACCEPTOR"] = {Emission_Family::PSSM, 1, false, 15, 3};
-    profile.emissions["START_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
-    profile.emissions["STOP_CODON"] = {Emission_Family::DETERMINISTIC, 1, false, 0, 0};
+    Genome_Profile profile = manual_profile();
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -549,14 +566,16 @@ Genome_Profile parse_args(int argc, char** argv) {
         string value = argv[++i];
         if (arg == "--name") {
             profile.name = value;
-        } else if (arg == "--fasta") {
-            profile.fasta_path = value;
-        } else if (arg == "--gff") {
-            profile.gff_path = value;
-        } else if (arg == "--test-chromosomes") {
-            profile.test_chromosomes = split_csv(value);
-        } else if (arg == "--exclude-chromosomes") {
-            profile.exclude_chromosomes = split_csv(value);
+        } else if (arg == "--profile") {
+            profile = Genome_Profile::load(value);
+        } else if (arg == "--train-fasta") {
+            profile.train_fasta_path = value;
+        } else if (arg == "--train-gff") {
+            profile.train_gff_path = value;
+        } else if (arg == "--test-fasta") {
+            profile.test_fasta_path = value;
+        } else if (arg == "--test-gff") {
+            profile.test_gff_path = value;
         } else if (arg == "--transition-alpha") {
             profile.transition_alpha = stod(value);
         } else if (arg == "--emission-alpha") {
@@ -568,8 +587,9 @@ Genome_Profile parse_args(int argc, char** argv) {
         }
     }
 
-    if (profile.fasta_path.empty() || profile.gff_path.empty() || profile.test_chromosomes.empty()) {
-        cerr << "--fasta, --gff, and --test-chromosomes are required when passing custom arguments.\n";
+    if (profile.train_fasta_path.empty() || profile.train_gff_path.empty() ||
+        profile.test_fasta_path.empty() || profile.test_gff_path.empty()) {
+        cerr << "Provide --profile or all of --train-fasta, --train-gff, --test-fasta, --test-gff.\n";
         print_usage(argv[0]);
         exit(1);
     }
@@ -579,61 +599,61 @@ Genome_Profile parse_args(int argc, char** argv) {
 
 } // namespace
 
-namespace gene_hmm {
-    Genome_Profile profile;
-}
-
 int main(int argc, char** argv) {
     gene_hmm::profile = parse_args(argc, argv);
 
     cout << "Loading validation profile: " << gene_hmm::profile.name << "\n";
-    cout << "FASTA: " << gene_hmm::profile.fasta_path << "\n";
-    cout << "GFF: " << gene_hmm::profile.gff_path << "\n";
+    cout << "Train FASTA: " << gene_hmm::profile.train_fasta_path << "\n";
+    cout << "Train GFF:   " << gene_hmm::profile.train_gff_path << "\n";
+    cout << "Test FASTA:  " << gene_hmm::profile.test_fasta_path << "\n";
+    cout << "Test GFF:    " << gene_hmm::profile.test_gff_path << "\n";
 
-    vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(gene_hmm::profile.fasta_path);
-    vector<Chromosome_Range> ranges = FNA_Parser::get_chromosome_ranges(gene_hmm::profile.fasta_path);
+    vector<Nucleotide> train_nucleotides =
+        FNA_Parser::parse_sequence(gene_hmm::profile.train_fasta_path);
+    vector<Chromosome_Range> train_chromosomes =
+        FNA_Parser::get_chromosome_ranges(gene_hmm::profile.train_fasta_path);
+    string train_gff_path = gene_hmm::profile.train_gff_path;
+    string train_fasta_path = gene_hmm::profile.train_fasta_path;
+    vector<int> train_regions = GFF_Parser::parse_regions(train_gff_path, train_fasta_path);
+    vector<State> train_gold_states = GFF_Parser::parse_states(train_regions);
 
-    string gff_path = gene_hmm::profile.gff_path;
-    string fasta_path = gene_hmm::profile.fasta_path;
-    vector<int> regions = GFF_Parser::parse_regions(gff_path, fasta_path);
-    vector<State> gold_states = GFF_Parser::parse_states(regions);
+    vector<Nucleotide> eval_nucleotides =
+        FNA_Parser::parse_sequence(gene_hmm::profile.test_fasta_path);
+    vector<Chromosome_Range> eval_chromosomes =
+        FNA_Parser::get_chromosome_ranges(gene_hmm::profile.test_fasta_path);
+    string eval_gff_path = gene_hmm::profile.test_gff_path;
+    string eval_fasta_path = gene_hmm::profile.test_fasta_path;
+    vector<int> eval_regions = GFF_Parser::parse_regions(eval_gff_path, eval_fasta_path);
+    vector<State> eval_gold_states = GFF_Parser::parse_states(eval_regions);
 
-    if (gold_states.size() != nucleotides.size()) {
-        cerr << "Gold state length does not match nucleotide length.\n";
+    if (train_gold_states.size() != train_nucleotides.size()) {
+        cerr << "Train gold state length does not match nucleotide length.\n";
+        return 1;
+    }
+    if (eval_gold_states.size() != eval_nucleotides.size()) {
+        cerr << "Test gold state length does not match nucleotide length.\n";
         return 1;
     }
 
-    set<string> test_chromosomes = make_set(gene_hmm::profile.test_chromosomes);
-    set<string> excluded_chromosomes = make_set(gene_hmm::profile.exclude_chromosomes);
-    vector<Chromosome_Range> train_ranges;
-    vector<Chromosome_Range> eval_ranges;
-
-    for (const auto& range : ranges) {
-        if (excluded_chromosomes.count(range.name)) {
-            continue;
-        }
-        if (test_chromosomes.count(range.name)) {
-            eval_ranges.push_back(range);
-        } else {
-            train_ranges.push_back(range);
-        }
-    }
-
-    if (eval_ranges.empty()) {
-        cerr << "No test chromosomes found in the profile/FASTA.\n";
-        return 1;
-    }
+    vector<Chromosome_Range> train_ranges = split_usable_ranges(train_chromosomes, train_regions);
+    vector<Chromosome_Range> eval_ranges = split_usable_ranges(eval_chromosomes, eval_regions);
     if (train_ranges.empty()) {
-        cerr << "No training chromosomes found after applying profile split.\n";
+        cerr << "No usable training intervals after applying annotation filters.\n";
+        return 1;
+    }
+    if (eval_ranges.empty()) {
+        cerr << "No usable evaluation intervals after applying annotation filters.\n";
         return 1;
     }
 
-    cout << "Training chromosomes: " << train_ranges.size() << "\n";
-    cout << "Evaluation chromosomes: " << eval_ranges.size() << "\n";
+    cout << "Training chromosomes: " << train_chromosomes.size() << "\n";
+    cout << "Evaluation chromosomes: " << eval_chromosomes.size() << "\n";
+    cout << "Usable training intervals: " << train_ranges.size() << "\n";
+    cout << "Usable evaluation intervals: " << eval_ranges.size() << "\n";
 
-    auto transition_log_probs = Transition_Model::compute_log_probs(gold_states, train_ranges);
-    Emission_Model emission_model = train_emissions(gold_states, nucleotides, train_ranges);
-    vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(gold_states, train_ranges);
+    auto transition_log_probs = Transition_Model::compute_log_probs(train_gold_states, train_ranges);
+    Emission_Model emission_model = train_emissions(train_gold_states, train_nucleotides, train_ranges);
+    vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_gold_states, train_ranges);
     size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
 
     Binary_Metrics coding_total;
@@ -650,14 +670,18 @@ int main(int argc, char** argv) {
     vector<Interval> predicted_gene_intervals;
     vector<Interval> gold_gene_intervals;
 
-    for (const auto& range : eval_ranges) {
-        cout << "\nDecoding " << range.name
-             << " bases=" << (range.end - range.start) << "\n";
+    cout << "\nDecoding usable evaluation intervals";
+    if (eval_ranges.size() == 1) {
+        cout << " on " << eval_ranges.front().name
+             << " bases=" << (eval_ranges.front().end - eval_ranges.front().start);
+    }
+    cout << "\n";
 
+    for (const auto& range : eval_ranges) {
         vector<Nucleotide> chromosome_nucleotides =
-            slice_nucleotides(nucleotides, range.start, range.end);
+            slice_nucleotides(eval_nucleotides, range.start, range.end);
         vector<State> chromosome_gold =
-            slice_states(gold_states, range.start, range.end);
+            slice_states(eval_gold_states, range.start, range.end);
         vector<State> chromosome_predicted =
             Viterbi::decode(
                 chromosome_nucleotides,

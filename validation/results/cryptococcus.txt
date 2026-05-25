@@ -1,40 +1,29 @@
 Loading validation profile: cryptococcus
 FASTA: genome_data/cryptococcus_data/GCF_000149245.1_CNA3_genomic.fna
 GFF: genome_data/cryptococcus_data/GCF_000149245.1_CNA3_genomic.gff
-Number of illegal transitions: 81
 Training chromosomes: 14
 Evaluation chromosomes: 1
+Usable training intervals: 3103
+Usable evaluation intervals: 437
 
-Training diagnostics:
-gold all chromosomes intergenic=12501603 start=10161 exon=5283240 donor=17532 intron=1075883 acceptor=17532 stop=10161
-log P(EXON_FRAME_3 -> EXON_FRAME_1)=-0.00607871
-log P(EXON_FRAME_3 -> DONOR_1)=-5.48935
-log P(EXON_FRAME_3 -> STOP_CODON_1)=-6.25038
-log P(INTRON_1 -> INTRON_1)=-0.0164149
-log P(INTRON_1 -> ACCEPTOR_1)=-4.11776
-
-Decoding NC_026745.1 bases=2291499
-gold NC_026745.1 intergenic=1470273 start=1278 exon=679959 donor=2194 intron=134323 acceptor=2194 stop=1278
-predicted NC_026745.1 intergenic=1538565 start=1872 exon=749190 donor=0 intron=0 acceptor=0 stop=1872
-gold exon emission magnitude NC_026745.1 count=679959 avg_log_emission=-1.35719
-gold donor PSSM emission magnitude NC_026745.1 count=2194 avg_log_emission=-7.07643
-gold acceptor PSSM emission magnitude NC_026745.1 count=2194 avg_log_emission=-21.2966
+Decoding usable evaluation intervals
 
 === Full Genome Holdout Validation ===
-evaluated bases=2291499
-exact 21-state accuracy=0.567677
-coding precision=0.5391 recall=0.5948 f1=0.5656 accuracy=0.7279 tp=405944 fp=346990 fn=276571 tn=1261994
-intron precision=0.0000 recall=0.0000 f1=0.0000 accuracy=0.9395 tp=0 fp=0 fn=138711 tn=2152788
+Metric                               Value
+Evaluated bases                    1478450
+Exact 21-state accuracy             0.8920
+Illegal transitions                      0
+Predicted gene intervals               525
+Gold gene intervals                    426
+Intron length cap p95                   96
+Gene start penalty                  1.0000
 
-Boundary metrics:
-start exact_matches=50 predicted=624 gold=426 precision=0.0801 recall=0.1174
-stop exact_matches=55 predicted=624 gold=426 precision=0.0881 recall=0.1291
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9235      0.9077      0.9155      0.9227    619529     51355     62986    744580
+intron            0.9485      0.6164      0.7472      0.9609     85496      4638     53215   1335101
 
-Structure:
-illegal predicted transitions=0
-predicted gene intervals count=624 examples: NC_026745.1:[9090,9921) NC_026745.1:[10798,12328) NC_026745.1:[24865,26050) NC_026745.1:[27082,28447) NC_026745.1:[28818,29607)
-gold gene intervals count=426 examples: NC_026745.1:[12799,13578) NC_026745.1:[26373,28447) NC_026745.1:[33158,34577) NC_026745.1:[40320,42079) NC_026745.1:[43364,44818)
-
-Error examples:
-false-positive gene-state runs count=426 examples: NC_026745.1:[9090,9921) NC_026745.1:[10798,12328) NC_026745.1:[24865,26050) NC_026745.1:[28818,29607) NC_026745.1:[30953,31487) NC_026745.1:[38586,39300) NC_026745.1:[42079,42148) NC_026745.1:[44818,44837) NC_026745.1:[45402,46823) NC_026745.1:[48841,48897)
-false-negative gene-state runs count=519 examples: NC_026745.1:[12799,13578) NC_026745.1:[26373,27082) NC_026745.1:[33680,34577) NC_026745.1:[40320,41200) NC_026745.1:[47100,47748) NC_026745.1:[50475,51193) NC_026745.1:[53387,54027) NC_026745.1:[59228,59238) NC_026745.1:[60735,60988) NC_026745.1:[61297,61865)
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.5600      0.6901         294         525         426
+stop              0.6190      0.7629         325         525         426

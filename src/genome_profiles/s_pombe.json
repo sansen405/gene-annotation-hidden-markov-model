@@ -1,0 +1,38 @@
+{
+    "name": "s_pombe",
+    "description": "Schizosaccharomyces pombe 972h- (RefSeq GCF_000002945.1)",
+
+    "dataset": {
+        "source_fasta": "genome_data/s_pombe/full/GCF_000002945.1_ASM294v2_genomic.fna",
+        "source_gff":   "genome_data/s_pombe/full/GCF_000002945.1_ASM294v2_genomic.gff",
+        "train_fasta":  "genome_data/s_pombe/train/s_pombe_train.fna",
+        "train_gff":    "genome_data/s_pombe/train/s_pombe_train.gff",
+        "test_fasta":   "genome_data/s_pombe/test/s_pombe_test.fna",
+        "test_gff":     "genome_data/s_pombe/test/s_pombe_test.gff",
+        "test_chromosomes":    ["NC_003424.3"],
+        "excluded_chromosomes": []
+    },
+
+    "filters": {
+        "min_first_cds_bp":     3,
+        "min_last_cds_bp":      3,
+        "min_intron_bp":        20,
+        "require_3n_cds":       true,
+        "include_minus_strand": false
+    },
+
+    "emissions": {
+        "INTERGENIC":  { "type": "markov", "order": 1 },
+        "INTRON":      { "type": "markov", "order": 1 },
+        "EXON_FRAME":  { "type": "markov", "order": 5, "frame_tied": true },
+        "DONOR":       { "type": "pssm", "window_left": 3,  "window_right": 6 },
+        "ACCEPTOR":    { "type": "pssm", "window_left": 15, "window_right": 3 },
+        "START_CODON": { "type": "deterministic" },
+        "STOP_CODON":  { "type": "deterministic" }
+    },
+
+    "smoothing": {
+        "transition_alpha": 0.02,
+        "emission_alpha":   0.1
+    }
+}

@@ -1,0 +1,29 @@
+Loading validation profile: yeast
+FASTA: genome_data/yeast_data/GCF_000146045.2_R64_genomic.fna
+GFF: genome_data/yeast_data/genomic.gff
+Training chromosomes: 15
+Evaluation chromosomes: 1
+Usable training intervals: 2776
+Usable evaluation intervals: 228
+
+Decoding usable evaluation intervals
+
+=== Full Genome Holdout Validation ===
+Metric                               Value
+Evaluated bases                     607351
+Exact 21-state accuracy             0.9843
+Illegal transitions                      0
+Predicted gene intervals               241
+Gold gene intervals                    241
+Intron length cap p95                  510
+Gene start penalty                  1.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9910      0.9896      0.9903      0.9888    347856      3165      3666    252664
+intron            0.7614      0.4382      0.5562      0.9952      1825       572      2340    602614
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.8465      0.8465         204         241         241
+stop              0.9627      0.9627         232         241         241

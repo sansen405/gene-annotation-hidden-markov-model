@@ -21,12 +21,17 @@ namespace gene_hmm {
 
         p.name = j["name"];
 
-        p.fasta_path = j["training"]["fasta"];
-        p.gff_path   = j["training"]["gff"];
-        for (const auto& c : j["training"]["test_chromosomes"])
+        const auto& dataset = j["dataset"];
+        p.source_fasta_path = dataset["source_fasta"];
+        p.source_gff_path   = dataset["source_gff"];
+        p.train_fasta_path  = dataset["train_fasta"];
+        p.train_gff_path    = dataset["train_gff"];
+        p.test_fasta_path   = dataset["test_fasta"];
+        p.test_gff_path     = dataset["test_gff"];
+        for (const auto& c : dataset["test_chromosomes"])
             p.test_chromosomes.push_back(c);
-        for (const auto& c : j["training"]["exclude_chromosomes"])
-            p.exclude_chromosomes.push_back(c);
+        for (const auto& c : dataset["excluded_chromosomes"])
+            p.excluded_chromosomes.push_back(c);
 
         p.min_first_cds_bp     = j["filters"]["min_first_cds_bp"];
         p.min_last_cds_bp      = j["filters"]["min_last_cds_bp"];
