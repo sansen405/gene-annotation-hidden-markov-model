@@ -55,7 +55,10 @@ Defines the shared vocabulary used across the project:
   per-chromosome offsets and ranges so downstream code can treat the genome as
   one concatenated sequence without crossing chromosome boundaries.
 - **`GFF_Parser`** — converts a GFF annotation into a per-base label vector
-  (regions, then HMM states) aligned to the FASTA.
+  (regions, then HMM states) aligned to the FASTA. CDS groups that do not pass
+  the active profile filters are marked as ignored annotation before state
+  labeling, so unsupported genes do not contribute training or evaluation
+  signal.
 
 ### `src/model/`
 - **`Transition_Model`** — given the per-base state vector and chromosome
@@ -188,6 +191,24 @@ Run validation on a custom genome:
   --gff genome_data/aspergillus_data/GCF_000149205.2_ASM14920v2_genomic.gff \
   --test-chromosomes NT_107008.1
 ```
+
+## Recent Model Fixes (1.2)
+
+- **Annotation filters now affect the training labels.** `GFF_Parser` groups CDS
+  fragments by parent transcript, applies the active profile's CDS-length,
+  intron-length, and reading-frame filters plus the current plus-strand support
+  rule, and marks failed groups as `IGNORED_REGION` instead of treating them as
+  ordinary intergenic sequence.
+- **Ignored annotation is excluded from model fitting and holdout scoring.**
+  The validation runner splits training and evaluation chromosomes into usable
+  intervals around ignored regions before computing transition/emission
+  probabilities or decoding held-out sequence.
+- **Region codes are named constants.** The parser now exposes
+  `INTERGENIC_REGION`, `CDS_REGION`, `INTRON_REGION`, and `IGNORED_REGION`,
+  and parser tests include the ignored count in their region sanity check.
+- **Validation output was refreshed.** The result files now use the compact
+  metric tables, report usable interval-aware scores, and include new
+  `c_elegans` and `yeast` validation runs.
 
 ## Recent Model Fixes (1.1)
 
