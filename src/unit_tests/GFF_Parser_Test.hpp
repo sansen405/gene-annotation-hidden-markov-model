@@ -55,7 +55,8 @@ namespace gene_hmm {
         size_t n_intergenic = count(regions.begin(), regions.end(), 0);
         size_t n_cds        = count(regions.begin(), regions.end(), 1);
         size_t n_intron     = count(regions.begin(), regions.end(), 2);
-        size_t unexpected   = regions.size() - n_intergenic - n_cds - n_intron;
+        size_t n_ignored    = count(regions.begin(), regions.end(), 3);
+        size_t unexpected   = regions.size() - n_intergenic - n_cds - n_intron - n_ignored;
 
         CHECK("no unexpected region codes", unexpected == 0);
         CHECK("at least some CDS bases present", n_cds > 0);
@@ -63,7 +64,8 @@ namespace gene_hmm {
 
         cout << "  intergenic: " << n_intergenic
              << "  CDS: " << n_cds
-             << "  intron: " << n_intron << "\n";
+             << "  intron: " << n_intron
+             << "  ignored: " << n_ignored << "\n";
     }
 
     static void test_states_basic(const vector<State>& states, const vector<Nucleotide>& nuc_seq) {

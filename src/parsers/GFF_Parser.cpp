@@ -1,5 +1,6 @@
 #include "GFF_Parser.hpp"
 #include "FNA_Parser.hpp"
+#include "../genome_profiles/Genome_Profile.hpp"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -17,8 +18,56 @@ namespace gene_hmm {
         bool operator<(const Exon_Fragment& other) const { return start < other.start; }
     };
 
+    struct CDS_Group {
+        vector<Exon_Fragment> fragments;
+        bool supported = true;
+    };
+
+    static bool group_passes_filters(const vector<Exon_Fragment>& fragments) {
+        if (fragments.empty()) {
+            return false;
+        }
+
+        size_t total_cds_bp = 0;
+        for (const auto& fragment : fragments) {
+            total_cds_bp += static_cast<size_t>(fragment.end - fragment.start + 1);
+        }
+
+        size_t first_cds_bp = static_cast<size_t>(fragments.front().end - fragments.front().start + 1);
+        size_t last_cds_bp = static_cast<size_t>(fragments.back().end - fragments.back().start + 1);
+        if (first_cds_bp < profile.min_first_cds_bp || last_cds_bp < profile.min_last_cds_bp) {
+            return false;
+        }
+
+        if (profile.require_3n_cds && total_cds_bp % 3 != 0) {
+            return false;
+        }
+
+        for (size_t i = 0; i + 1 < fragments.size(); ++i) {
+            int intron_bp = fragments[i + 1].start - fragments[i].end - 1;
+            if (intron_bp > 0 && static_cast<size_t>(intron_bp) < profile.min_intron_bp) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static void paint_region(
+        vector<int>& regions,
+        int start,
+        int end,
+        int region)
+    {
+        for (int index = start; index <= end; index++) {
+            if (index >= 0 && static_cast<size_t>(index) < regions.size()) {
+                regions[index] = region;
+            }
+        }
+    }
+
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path) {
-        //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron}
+        //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron, 3 -> Ignored annotation}
 
         size_t sequence_length = FNA_Parser::get_sequence_length(fna_path);
         auto chrom_offsets = FNA_Parser::get_chromosome_offsets(fna_path);
@@ -28,13 +77,13 @@ namespace gene_hmm {
             throw runtime_error("Unable to Open GFF File");
         }
 
-        vector<int> regions_sequence(sequence_length, 0);
+        vector<int> regions_sequence(sequence_length, GFF_Parser::INTERGENIC_REGION);
         string curr_line = "";
 
         vector<string> tokens;
         string t;
 
-        map<string, vector<Exon_Fragment>> gene_builder;
+        map<string, CDS_Group> gene_builder;
 
         //Group CDS fragments by parent_id, namespaced by chromosome
         while (getline(file, curr_line)) {
@@ -49,11 +98,11 @@ namespace gene_hmm {
                 tokens.push_back(t);
             }
 
-            if (tokens.size() != 9 || tokens[2] != "CDS" || tokens[6] != "+") {
+            if (tokens.size() != 9 || tokens[2] != "CDS") {
                 continue;
             }
 
-            //Translate per-chromosome GFF coords into the global concatenated vector
+            //Translate per-chromosome GFF coordinates into the global vector
             auto off_it = chrom_offsets.find(tokens[0]);
             if (off_it == chrom_offsets.end()) continue;
             int chrom_off = static_cast<int>(off_it->second);
@@ -71,31 +120,60 @@ namespace gene_hmm {
             }
 
             if (!CDS_curr_parent_id.empty()) {
-                gene_builder[tokens[0] + "|" + CDS_curr_parent_id]
-                    .push_back({CDS_curr_start, CDS_curr_end});
+                string key = tokens[0] + "|" + CDS_curr_parent_id;
+                gene_builder[key].fragments.push_back({CDS_curr_start, CDS_curr_end});
+                if (tokens[6] != "+") {
+                    gene_builder[key].supported = false;
+                }
             }
         }
 
-        //Lay each gene down: CDS fragments as 1, gaps between fragments as 2 (intron)
-        for (auto& [parent_id, fragments] : gene_builder) {
-            sort(fragments.begin(), fragments.end());
+        for (auto& [parent_id, group] : gene_builder) {
+            sort(group.fragments.begin(), group.fragments.end());
+            group.supported = group.supported && group_passes_filters(group.fragments);
+        }
 
-            for (size_t i = 0; i < fragments.size(); ++i) {
-                for (int index = fragments[i].start; index <= fragments[i].end; index++) {
-                    if (index >= 0 && static_cast<size_t>(index) < sequence_length) {
-                        regions_sequence[index] = 1;
-                    }
+        for (auto& [parent_id, group] : gene_builder) {
+            if (group.supported) {
+                continue;
+            }
+
+            for (size_t i = 0; i < group.fragments.size(); ++i) {
+                paint_region(
+                    regions_sequence,
+                    group.fragments[i].start,
+                    group.fragments[i].end,
+                    GFF_Parser::IGNORED_REGION);
+
+                if (i + 1 < group.fragments.size()) {
+                    paint_region(
+                        regions_sequence,
+                        group.fragments[i].end + 1,
+                        group.fragments[i + 1].start - 1,
+                        GFF_Parser::IGNORED_REGION);
                 }
+            }
+        }
 
-                if (i + 1 < fragments.size()) {
-                    int intron_start = fragments[i].end + 1;
-                    int intron_end = fragments[i+1].start - 1;
+        //CDS fragments as 1, gaps between fragments as 2 (intron)
+        for (auto& [parent_id, group] : gene_builder) {
+            if (!group.supported) {
+                continue;
+            }
 
-                    for (int index = intron_start; index <= intron_end; index++) {
-                        if (index >= 0 && static_cast<size_t>(index) < sequence_length) {
-                            regions_sequence[index] = 2;
-                        }
-                    }
+            for (size_t i = 0; i < group.fragments.size(); ++i) {
+                paint_region(
+                    regions_sequence,
+                    group.fragments[i].start,
+                    group.fragments[i].end,
+                    GFF_Parser::CDS_REGION);
+
+                if (i + 1 < group.fragments.size()) {
+                    paint_region(
+                        regions_sequence,
+                        group.fragments[i].end + 1,
+                        group.fragments[i + 1].start - 1,
+                        GFF_Parser::INTRON_REGION);
                 }
             }
         }
@@ -109,7 +187,8 @@ namespace gene_hmm {
         size_t index = 0;
         while(index < region_sequence.size()){
             //Case 0: intergenic
-            if(region_sequence[index] == 0){
+            if(region_sequence[index] == GFF_Parser::INTERGENIC_REGION ||
+               region_sequence[index] == GFF_Parser::IGNORED_REGION){
                 state_sequence[index] = State::INTERGENIC;
                 frame_counter = 0;
                 index++;
@@ -117,12 +196,13 @@ namespace gene_hmm {
             }
 
             //Case 1: CDS
-            if(region_sequence[index] == 1){
+            if(region_sequence[index] == GFF_Parser::CDS_REGION){
                 //Case 1A: start codon (intergenic -> CDS boundary)
-                if(index == 0 || region_sequence[index-1] == 0){
+                if(index == 0 || region_sequence[index-1] == GFF_Parser::INTERGENIC_REGION ||
+                   region_sequence[index-1] == GFF_Parser::IGNORED_REGION){
                     if (index + 2 < region_sequence.size()
-                        && region_sequence[index+1] == 1
-                        && region_sequence[index+2] == 1) {
+                        && region_sequence[index+1] == GFF_Parser::CDS_REGION
+                        && region_sequence[index+2] == GFF_Parser::CDS_REGION) {
                         state_sequence[index] = State::START_CODON_1;
                         state_sequence[index+1] = State::START_CODON_2;
                         state_sequence[index+2] = State::START_CODON_3;
@@ -130,15 +210,15 @@ namespace gene_hmm {
                         frame_counter = 0;
                         continue;
                     }
-                    //First CDS fragment is split by an intron (rare); fall through
-                    //and let this base be handled as a normal exon-frame base below
                 }
 
                 //Case 1B: stop codon (CDS -> intergenic boundary, or end of sequence)
                 if(index + 2 < region_sequence.size()
-                   && region_sequence[index+1] == 1
-                   && region_sequence[index+2] == 1
-                   && (index + 3 >= region_sequence.size() || region_sequence[index+3] == 0)){
+                   && region_sequence[index+1] == GFF_Parser::CDS_REGION
+                   && region_sequence[index+2] == GFF_Parser::CDS_REGION
+                   && (index + 3 >= region_sequence.size() ||
+                       region_sequence[index+3] == GFF_Parser::INTERGENIC_REGION ||
+                       region_sequence[index+3] == GFF_Parser::IGNORED_REGION)){
                     state_sequence[index] = State::STOP_CODON_1;
                     state_sequence[index+1] = State::STOP_CODON_2;
                     state_sequence[index+2] = State::STOP_CODON_3;
@@ -164,15 +244,11 @@ namespace gene_hmm {
             }
 
             //Case 2: intron
-            if (region_sequence[index] == 2){
-                bool is_donor = (index == 0 || region_sequence[index-1] == 1);
-                bool is_acceptor = (index + 1 < region_sequence.size() && region_sequence[index+1] == 1);
+            if (region_sequence[index] == GFF_Parser::INTRON_REGION){
+                bool is_donor = (index == 0 || region_sequence[index-1] == GFF_Parser::CDS_REGION);
+                bool is_acceptor = (index + 1 < region_sequence.size() && region_sequence[index+1] == GFF_Parser::CDS_REGION);
 
                 //Case 2A: donor (CDS -> intron boundary)
-                //The donor/intron/acceptor frame mirrors the next-exon frame in frame_counter:
-                //  frame_counter == 0 -> previous exon ended at EXON_FRAME_3 -> use intron pair 1
-                //  frame_counter == 1 -> previous exon stopped mid-codon at EXON_FRAME_1 -> use pair 2
-                //  frame_counter == 2 -> previous exon stopped mid-codon at EXON_FRAME_2 -> use pair 3
                 if(is_donor){
                     if(frame_counter == 0){
                         state_sequence[index] = State::DONOR_1;
