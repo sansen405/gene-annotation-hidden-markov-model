@@ -4,6 +4,7 @@
 #include "unit_tests/Transition_Model_Test.hpp"
 #include "unit_tests/Emission_Model_Test.hpp"
 #include "unit_tests/Viterbi_Test.hpp"
+#include "unit_tests/Forward_Backward_Test.hpp"
 
 int main() {
     gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/yeast.json");
@@ -20,6 +21,8 @@ int main() {
     gene_hmm::run_Emission_Model_tests();
     
     gene_hmm::run_Viterbi_tests();
+
+    gene_hmm::run_Forward_Backward_tests();
 
     return 0;
 }
