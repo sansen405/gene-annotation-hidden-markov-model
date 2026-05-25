@@ -29,7 +29,9 @@ Gene_Analysis_HMM/
 │   │   └── Emission_Model.cpp
 │   ├── decoding/
 │   │   ├── Viterbi.hpp
-│   │   └── Viterbi.cpp
+│   │   ├── Viterbi.cpp
+│   │   ├── Forward_Backward.hpp
+│   │   └── Forward_Backward.cpp
 │   └── genome_profiles/
 │       └── yeast.json             # S. cerevisiae S288C (RefSeq GCF_000146045.2)
 ├── validation/
@@ -92,6 +94,8 @@ Emission summary:
 ### `src/decoding/`
 `Viterbi` decodes the best state path. The validation runner uses the extended
 decoder overload with an intron body length cap and a gene-start penalty.
+`Forward_Backward` computes posterior state probabilities and returns per-base
+confidence for a predicted path.
 
 ### `src/genome_profiles/`
 JSON files that fully describe a training/decoding run for one organism:
@@ -157,6 +161,7 @@ Build and run unit tests:
 clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/main.cpp \
   src/decoding/Viterbi.cpp \
+  src/decoding/Forward_Backward.cpp \
   src/model/Transition_Model.cpp \
   src/genome_profiles/Genome_Profile.cpp \
   src/parsers/FNA_Parser.cpp \
@@ -191,6 +196,20 @@ Run validation on a custom genome:
   --gff genome_data/aspergillus_data/GCF_000149205.2_ASM14920v2_genomic.gff \
   --test-chromosomes NT_107008.1
 ```
+
+## Recent Model Fixes (1.3)
+
+- **Forward-Backward posterior confidence was added.**
+  `src/decoding/Forward_Backward.*` computes posterior log probabilities for
+  each HMM state at each base using the same transition and emission model as
+  decoding.
+- **Per-base confidence is available for predicted paths.**
+  `Forward_Backward::confidence(...)` returns a `vector<double>` aligned to the
+  input sequence, where each value is
+  `P(predicted_state_at_position_i | full sequence)`.
+- **Confidence tests were added.** The unit test runner now checks empty input,
+  forced-path confidence near `1.0`, and a simple ambiguous one-base posterior
+  case.
 
 ## Recent Model Fixes (1.2)
 
