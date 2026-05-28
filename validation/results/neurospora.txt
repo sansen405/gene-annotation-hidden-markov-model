@@ -1,40 +1,29 @@
 Loading validation profile: neurospora
 FASTA: genome_data/neurospora_data/GCF_000182925.2_NC12_genomic.fna
 GFF: genome_data/neurospora_data/GCF_000182925.2_NC12_genomic.gff
-Number of illegal transitions: 48
 Training chromosomes: 20
 Evaluation chromosomes: 1
+Usable training intervals: 3701
+Usable evaluation intervals: 1157
 
-Training diagnostics:
-gold all chromosomes intergenic=32847276 start=14610 exon=7357524 donor=7762 intron=852834 acceptor=7762 stop=14610
-log P(EXON_FRAME_3 -> EXON_FRAME_1)=-0.00318894
-log P(EXON_FRAME_3 -> DONOR_1)=-6.72554
-log P(EXON_FRAME_3 -> STOP_CODON_1)=-6.22264
-log P(INTRON_1 -> INTRON_1)=-0.00894547
-log P(INTRON_1 -> ACCEPTOR_1)=-4.72108
-
-Decoding NC_026501.1 bases=9798893
-gold NC_026501.1 intergenic=7804187 start=3543 exon=1779354 donor=1988 intron=204290 acceptor=1988 stop=3543
-predicted NC_026501.1 intergenic=5055583 start=10017 exon=4719318 donor=2 intron=3954 acceptor=2 stop=10017
-gold exon emission magnitude NC_026501.1 count=1779354 avg_log_emission=-1.3468
-gold donor PSSM emission magnitude NC_026501.1 count=1988 avg_log_emission=-7.18431
-gold acceptor PSSM emission magnitude NC_026501.1 count=1988 avg_log_emission=-21.2169
+Decoding usable evaluation intervals
 
 === Full Genome Holdout Validation ===
-evaluated bases=9798893
-exact 21-state accuracy=0.561912
-coding precision=0.3481 recall=0.9235 f1=0.5056 accuracy=0.6708 tp=1649754 fp=3089598 fn=136686 tn=4922855
-intron precision=0.0000 recall=0.0000 f1=0.0000 accuracy=0.9783 tp=0 fp=3958 fn=208266 tn=9586669
+Metric                               Value
+Evaluated bases                    7767159
+Exact 21-state accuracy             0.8578
+Illegal transitions                      0
+Predicted gene intervals              2198
+Gold gene intervals                   1181
+Intron length cap p95                  320
+Gene start penalty                  1.0000
 
-Boundary metrics:
-start exact_matches=173 predicted=3339 gold=1181 precision=0.0518 recall=0.1465
-stop exact_matches=221 predicted=3339 gold=1181 precision=0.0662 recall=0.1871
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.7443      0.9624      0.8394      0.9153   1719266    590764     67174   5389955
+intron            0.2616      0.7168      0.3833      0.9381    149290    421446     58976   7137447
 
-Structure:
-illegal predicted transitions=0
-predicted gene intervals count=3339 examples: NC_026501.1:[1564,2785) NC_026501.1:[2997,4356) NC_026501.1:[5363,6350) NC_026501.1:[6780,7044) NC_026501.1:[9097,12988)
-gold gene intervals count=1181 examples: NC_026501.1:[3385,4454) NC_026501.1:[9603,12992) NC_026501.1:[15929,16647) NC_026501.1:[17871,19368) NC_026501.1:[36098,38857)
-
-Error examples:
-false-positive gene-state runs count=3273 examples: NC_026501.1:[1564,2785) NC_026501.1:[2997,3385) NC_026501.1:[5363,6350) NC_026501.1:[6780,7044) NC_026501.1:[9097,9603) NC_026501.1:[15430,15929) NC_026501.1:[17381,17871) NC_026501.1:[20067,20493) NC_026501.1:[34366,35242) NC_026501.1:[35868,36098)
-false-negative gene-state runs count=853 examples: NC_026501.1:[4356,4454) NC_026501.1:[12988,12992) NC_026501.1:[16294,16647) NC_026501.1:[19358,19368) NC_026501.1:[38478,38680) NC_026501.1:[38854,38857) NC_026501.1:[57187,57200) NC_026501.1:[60581,60618) NC_026501.1:[127867,128081) NC_026501.1:[133835,134464)
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.2853      0.5309         627        2198        1181
+stop              0.4295      0.7993         944        2198        1181

@@ -1,8 +1,10 @@
-# Keep large non-yeast genome datasets local.
-genome_data/aspergillus_data/
-genome_data/c_elegans_data/
-genome_data/candida_data/
-genome_data/cryptococcus_data/
-genome_data/neurospora_data/
-genome_data/s_pombe_data/
-genome_data/salmonella_data/
+# Keep large non-yeast genome source datasets local.
+genome_data/aspergillus/
+genome_data/c_elegans/
+genome_data/candida/
+genome_data/cryptococcus/
+genome_data/neurospora/
+genome_data/s_pombe/
+genome_data/salmonella/
+# Legacy flat layout (pre full/train/test split).
+genome_data/*_data/

@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "concurrently -n api,web -c blue,green \"node server.js\" \"vite --port 5173 --strictPort\"",
+    "server": "node server.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "cors": "latest",
+    "express": "latest",
+    "multer": "latest",
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",

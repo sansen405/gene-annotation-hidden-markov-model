@@ -12,8 +12,8 @@ int main() {
     gene_hmm::run_FNA_Parser_tests();
 
     gene_hmm::run_GFF_Parser_tests(
-        gene_hmm::profile.fasta_path,
-        gene_hmm::profile.gff_path
+        gene_hmm::profile.train_fasta_path,
+        gene_hmm::profile.train_gff_path
     );
 
     gene_hmm::run_Transition_Model_tests();

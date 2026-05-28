@@ -33,14 +33,24 @@ Gene_Analysis_HMM/
 │   │   ├── Forward_Backward.hpp
 │   │   └── Forward_Backward.cpp
 │   └── genome_profiles/
-│       └── yeast.json             # S. cerevisiae S288C (RefSeq GCF_000146045.2)
+│       ├── yeast.json
+│       ├── aspergillus.json
+│       ├── candida.json
+│       ├── cryptococcus.json
+│       ├── neurospora.json
+│       ├── s_pombe.json
+│       └── c_elegans.json
 ├── validation/
 │   ├── full_genome_validation.cpp # train/test holdout validation runner
 │   └── diagnostics/               # extra boundary and intron diagnostics
+├── src/tools/
+│   ├── predict_fna.cpp            # JSON prediction CLI for uploaded .fna input
+│   └── split_genome_data.cpp      # writes train/test FASTA+GFF from a profile
 └── genome_data/
-    └── yeast_data/
-        ├── GCF_000146045.2_R64_genomic.fna
-        └── genomic.gff
+    └── yeast/
+        ├── full/                  # unsplit source assembly + annotation
+        ├── train/                 # training chromosomes only
+        └── test/                  # held-out test chromosomes only
 ```
 
 ## Components
@@ -105,8 +115,27 @@ emission model choices, and smoothing hyperparameters.
 Example: [`src/genome_profiles/yeast.json`](src/genome_profiles/yeast.json).
 
 ### `genome_data/`
-Source FASTA and GFF for *Saccharomyces cerevisiae* S288C
-(RefSeq assembly `GCF_000146045.2`, R64). Referenced from `yeast.json`.
+Each organism lives under `genome_data/<organism>/` with three folders:
+
+- `full/` — original assembly FASTA and GFF (used only to regenerate splits)
+- `train/` — `*_train.fna` and `*_train.gff` used for model fitting
+- `test/` — `*_test.fna` and `*_test.gff` used for holdout validation
+
+The webapp predictor and validation runner train exclusively on the `train/`
+files. Yeast is checked in; other organisms stay local (see `.gitignore`).
+
+Regenerate train/test files after changing source data or holdout chromosomes:
+
+```sh
+clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
+  src/tools/split_genome_data.cpp \
+  src/genome_profiles/Genome_Profile.cpp \
+  -o /tmp/split_genome_data
+
+/tmp/split_genome_data src/genome_profiles/yeast.json
+/tmp/split_genome_data src/genome_profiles/aspergillus.json
+# ... repeat for candida, cryptococcus, neurospora, s_pombe, c_elegans
+```
 
 ## Genome Profile Schema
 
@@ -117,11 +146,15 @@ Each profile in `src/genome_profiles/` follows this shape:
   "name": "yeast",
   "description": "...",
 
-  "training": {
-    "fasta": "path/to/genome.fna",
-    "gff":   "path/to/annotation.gff",
-    "test_chromosomes":    ["NC_001148.4"],
-    "exclude_chromosomes": ["NC_001224.1"]
+  "dataset": {
+    "source_fasta": "genome_data/yeast/full/GCF_000146045.2_R64_genomic.fna",
+    "source_gff":   "genome_data/yeast/full/genomic.gff",
+    "train_fasta":  "genome_data/yeast/train/yeast_train.fna",
+    "train_gff":    "genome_data/yeast/train/yeast_train.gff",
+    "test_fasta":   "genome_data/yeast/test/yeast_test.fna",
+    "test_gff":     "genome_data/yeast/test/yeast_test.gff",
+    "test_chromosomes":     ["NC_001148.4"],
+    "excluded_chromosomes": ["NC_001224.1"]
   },
 
   "filters": {
@@ -179,6 +212,7 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   validation/full_genome_validation.cpp \
   src/decoding/Viterbi.cpp \
   src/model/Transition_Model.cpp \
+  src/genome_profiles/Genome_Profile.cpp \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
   src/model/Emission_Model.cpp \
@@ -187,15 +221,30 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
 /tmp/full_genome_validation
 ```
 
-Run validation on a custom genome:
+Run validation on another organism (after splitting its data):
 
 ```sh
-/tmp/full_genome_validation \
-  --name aspergillus \
-  --fasta genome_data/aspergillus_data/GCF_000149205.2_ASM14920v2_genomic.fna \
-  --gff genome_data/aspergillus_data/GCF_000149205.2_ASM14920v2_genomic.gff \
-  --test-chromosomes NT_107008.1
+/tmp/full_genome_validation --profile src/genome_profiles/aspergillus.json
 ```
+
+## Local Frontend
+
+The `frontend/` directory contains a local React UI plus a local Node API. The
+API accepts FASTA/FNA uploads, runs the C++ HMM predictor on the same machine,
+and keeps prediction runs in memory for the current browser session only. There
+is no cloud storage or external service integration.
+
+```sh
+cd frontend
+npm install
+npm run dev:all
+```
+
+Open the Vite URL printed by the terminal, usually
+`http://localhost:5173/`. The local API listens on `http://localhost:5174/`.
+
+The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
+`src/tools/predict_fna.cpp` (`--fna PATH --profile PATH`).
 
 ## Recent Model Fixes (1.3)
 
