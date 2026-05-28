@@ -5,10 +5,15 @@
 #include "unit_tests/Emission_Model_Test.hpp"
 #include "unit_tests/Viterbi_Test.hpp"
 #include "unit_tests/Forward_Backward_Test.hpp"
+#include <iostream>
 #include <string>
 
-int main() {
-    gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/fission_yeasts.json");
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " PROFILE_JSON\n";
+        return 1;
+    }
+    gene_hmm::profile = gene_hmm::Genome_Profile::load(argv[1]);
 
     gene_hmm::run_FNA_Parser_tests();
 

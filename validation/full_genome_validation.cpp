@@ -20,6 +20,7 @@ using namespace gene_hmm;
 using namespace std;
 
 Log_Prob gene_start_penalty = 1.0;
+string splice_cnn_scores_path;
 
 struct Binary_Metrics {
     size_t tp = 0;
@@ -39,6 +40,7 @@ struct Sequence_Data {
     vector<State> states;
     vector<int> regions;
     vector<Chromosome_Range> chromosomes;
+    vector<size_t> dataset_offsets;
 };
 
 bool is_coding(State state) {
@@ -462,6 +464,7 @@ void append_dataset(
     const string& gff_path)
 {
     size_t offset = combined.nucleotides.size();
+    combined.dataset_offsets.push_back(offset);
 
     vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(fasta_path);
     vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(fasta_path);
@@ -555,10 +558,6 @@ void print_average_emission(
     cout << "\n";
 }
 
-Genome_Profile default_profile() {
-    return Genome_Profile::load("src/genome_profiles/fission_yeasts.json");
-}
-
 Genome_Profile manual_profile() {
     Genome_Profile profile;
     profile.name = "custom";
@@ -587,6 +586,7 @@ void print_usage(const string& program_name) {
          << " --train-fasta PATH --train-gff PATH --test-fasta PATH --test-gff PATH [options]\n\n";
     cerr << "Options:\n";
     cerr << "  --name NAME              Dataset label for output\n";
+    cerr << "  --splice-cnn-scores PATH CNN donor/acceptor score TSV for evaluation sequence\n";
     cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
     cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n\n";
     cerr << "Example:\n";
@@ -600,7 +600,8 @@ void print_usage(const string& program_name) {
 
 Genome_Profile parse_args(int argc, char** argv) {
     if (argc == 1) {
-        return default_profile();
+        print_usage(argv[0]);
+        exit(1);
     }
 
     Genome_Profile profile = manual_profile();
@@ -630,6 +631,8 @@ Genome_Profile parse_args(int argc, char** argv) {
             profile.test_fasta_path = value;
         } else if (arg == "--test-gff") {
             profile.test_gff_path = value;
+        } else if (arg == "--splice-cnn-scores") {
+            splice_cnn_scores_path = value;
         } else if (arg == "--transition-alpha") {
             profile.transition_alpha = stod(value);
         } else if (arg == "--emission-alpha") {
@@ -710,6 +713,21 @@ int main(int argc, char** argv) {
 
     auto transition_log_probs = Transition_Model::compute_log_probs(train_data.states, train_ranges);
     Emission_Model emission_model = train_emissions(train_data.states, train_data.nucleotides, train_ranges);
+    if (!splice_cnn_scores_path.empty()) {
+        emission_model.load_splice_cnn_scores(splice_cnn_scores_path, eval_data.nucleotides.size());
+    } else if (!gene_hmm::profile.splice_cnn.test_score_paths.empty()) {
+        if (gene_hmm::profile.splice_cnn.test_score_paths.size() != eval_data.dataset_offsets.size()) {
+            cerr << "Profile splice_cnn.test_scores count does not match evaluation datasets.\n";
+            return 1;
+        }
+        emission_model.load_splice_cnn_scores(
+            gene_hmm::profile.splice_cnn.test_score_paths,
+            eval_data.dataset_offsets,
+            eval_data.nucleotides.size());
+    } else {
+        cerr << "Provide --splice-cnn-scores or define splice_cnn.test_scores in the profile.\n";
+        return 1;
+    }
     vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_data.states, train_ranges);
     size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
 
@@ -735,6 +753,7 @@ int main(int argc, char** argv) {
     cout << "\n";
 
     for (const auto& range : eval_ranges) {
+        emission_model.set_splice_cnn_position_offset(range.start);
         vector<Nucleotide> chromosome_nucleotides =
             slice_nucleotides(eval_data.nucleotides, range.start, range.end);
         vector<State> chromosome_gold =

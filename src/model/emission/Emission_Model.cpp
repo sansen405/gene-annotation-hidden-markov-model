@@ -382,6 +382,22 @@ namespace gene_hmm{
         splice_cnn_scores_loaded = true;
     }
 
+    void Emission_Model::load_splice_cnn_scores(
+        const vector<string>& score_paths,
+        const vector<size_t>& offsets,
+        size_t sequence_length)
+    {
+        if(score_paths.empty()){
+            cerr << "CNN splice score paths are empty; donor/acceptor emissions cannot use CNN predictions.\n";
+            throw runtime_error("Missing CNN splice score paths.");
+        }
+        if(!splice_cnn.load_scores(score_paths, offsets, sequence_length)){
+            cerr << "CNN splice scores did not load from one or more profile score paths.\n";
+            throw runtime_error("Missing CNN splice score file.");
+        }
+        splice_cnn_scores_loaded = true;
+    }
+
     void Emission_Model::set_splice_cnn_position_offset(size_t offset) {
         splice_cnn_position_offset = offset;
     }

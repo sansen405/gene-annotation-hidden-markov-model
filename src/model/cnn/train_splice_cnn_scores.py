@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import random
 import time
 from collections import defaultdict
@@ -297,6 +298,48 @@ def write_scores(model: SpliceCNN, dataset: FastaDataset, radius: int, output_pa
     log(f"finished scores: {output_path} elapsed={time.perf_counter() - start_time:.1f}s")
 
 
+def candidate_splice_positions(sequence: str) -> list[int]:
+    positions: set[int] = set()
+    for pos in range(1, len(sequence) - 1):
+        if sequence[pos : pos + 2] == "GT" or sequence[pos - 1 : pos + 1] == "AG":
+            positions.add(pos)
+    return sorted(positions)
+
+
+def write_sparse_scores(model: SpliceCNN, dataset: FastaDataset, radius: int, output_path: Path, batch_size: int) -> None:
+    model.eval()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    candidate_counts = [len(candidate_splice_positions(record.sequence)) for record in dataset.records]
+    total_candidates = sum(candidate_counts)
+    log(
+        f"writing sparse scores: input={dataset.path} output={output_path} "
+        f"bases={format_count(dataset.base_count)} candidates={format_count(total_candidates)}"
+    )
+
+    start_time = time.perf_counter()
+    written_candidates = 0
+    next_progress = 10
+    with output_path.open("w") as output, torch.no_grad():
+        for record, candidate_count in zip(dataset.records, candidate_counts):
+            positions = candidate_splice_positions(record.sequence)
+            if len(positions) != candidate_count:
+                raise RuntimeError("Candidate position count changed during sparse scoring.")
+            for start in range(0, len(positions), batch_size):
+                batch_positions = positions[start : start + batch_size]
+                windows = [window_at(record.sequence, pos, radius) for pos in batch_positions]
+                logits = model(one_hot_encode_windows(windows))
+                for local_pos, row in zip(batch_positions, logits):
+                    position = record.offset + local_pos
+                    output.write(f"{position}\t{float(row[0]):.8f}\t{float(row[1]):.8f}\n")
+                written_candidates += len(batch_positions)
+                progress = int((written_candidates / max(1, total_candidates)) * 100)
+                if progress >= next_progress:
+                    log(f"sparse score writing progress for {output_path}: {min(progress, 100)}%")
+                    next_progress += 10
+    log(f"finished sparse scores: {output_path} elapsed={time.perf_counter() - start_time:.1f}s")
+
+
 def validate_matching_counts(label: str, left: list[Path], right: list[Path]) -> None:
     if len(left) != len(right):
         raise ValueError(f"Expected the same number of {label} FASTA and GFF paths.")
@@ -307,23 +350,113 @@ def validate_output_counts(label: str, inputs: list[Path], outputs: list[Path]) 
         raise ValueError(f"Expected one {label} score output path per {label} FASTA.")
 
 
+def list_from_json(value: object, label: str) -> list[Path]:
+    if isinstance(value, str):
+        return [Path(value)]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return [Path(item) for item in value]
+    raise ValueError(f"Profile splice_cnn.{label} must be a string or list of strings.")
+
+
+def profile_species(profile: dict[str, object]) -> list[dict[str, object]]:
+    dataset = profile.get("dataset")
+    if not isinstance(dataset, dict):
+        raise ValueError("Profile must define a dataset object.")
+
+    species = dataset.get("species")
+    if species is None:
+        return [dataset]
+    if isinstance(species, list) and all(isinstance(item, dict) for item in species):
+        return species
+    raise ValueError("Profile dataset.species must be a list of dataset objects.")
+
+
+def path_list_from_species(species: list[dict[str, object]], key: str) -> list[Path]:
+    paths: list[Path] = []
+    for item in species:
+        value = item.get(key)
+        if not isinstance(value, str):
+            raise ValueError(f"Profile species entry is missing string field: {key}")
+        paths.append(Path(value))
+    return paths
+
+
+def apply_profile_defaults(args: argparse.Namespace) -> None:
+    if args.profile is None:
+        return
+
+    with args.profile.open() as handle:
+        profile = json.load(handle)
+    if not isinstance(profile, dict):
+        raise ValueError("Profile JSON must be an object.")
+
+    species = profile_species(profile)
+    splice_cnn = profile.get("splice_cnn")
+    if not isinstance(splice_cnn, dict):
+        raise ValueError("Profile must define splice_cnn paths for CNN score generation.")
+
+    args.train_fasta = args.train_fasta or path_list_from_species(species, "train_fasta")
+    args.train_gff = args.train_gff or path_list_from_species(species, "train_gff")
+    args.test_fasta = args.test_fasta or path_list_from_species(species, "test_fasta")
+    if args.model_out is None:
+        model_path = splice_cnn.get("model")
+        if not isinstance(model_path, str) or not model_path:
+            raise ValueError("Profile splice_cnn.model must be a non-empty string.")
+        args.model_out = Path(model_path)
+    args.train_scores_out = args.train_scores_out or list_from_json(splice_cnn.get("train_scores"), "train_scores")
+    args.test_scores_out = args.test_scores_out or list_from_json(splice_cnn.get("test_scores"), "test_scores")
+
+    filters = profile.get("filters")
+    if isinstance(filters, dict):
+        if args.min_intron_bp is None:
+            args.min_intron_bp = int(filters.get("min_intron_bp", 20))
+        if args.require_3n_cds is None:
+            args.require_3n_cds = bool(filters.get("require_3n_cds", True))
+
+
+def validate_required_args(args: argparse.Namespace) -> None:
+    missing: list[str] = []
+    for attr, option in [
+        ("train_fasta", "--train-fasta"),
+        ("train_gff", "--train-gff"),
+        ("test_fasta", "--test-fasta"),
+        ("model_out", "--model-out"),
+        ("train_scores_out", "--train-scores-out"),
+        ("test_scores_out", "--test-scores-out"),
+    ]:
+        if not getattr(args, attr):
+            missing.append(option)
+    if missing:
+        raise ValueError("Provide --profile or explicit values for: " + ", ".join(missing))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a splice-site CNN and write HMM emission scores.")
-    parser.add_argument("--train-fasta", required=True, type=Path, nargs="+")
-    parser.add_argument("--train-gff", required=True, type=Path, nargs="+")
-    parser.add_argument("--test-fasta", required=True, type=Path, nargs="+")
-    parser.add_argument(
-        "--model-out",
-        default=Path(__file__).resolve().parent / "trained_models" / "fission_yeasts_splice_cnn.pt",
-        type=Path,
-    )
-    parser.add_argument("--train-scores-out", required=True, type=Path, nargs="+")
-    parser.add_argument("--test-scores-out", required=True, type=Path, nargs="+")
+    parser.add_argument("--profile", type=Path, help="Genome profile JSON that defines dataset and splice_cnn paths.")
+    parser.add_argument("--train-fasta", type=Path, nargs="+")
+    parser.add_argument("--train-gff", type=Path, nargs="+")
+    parser.add_argument("--test-fasta", type=Path, nargs="+")
+    parser.add_argument("--model-out", type=Path)
+    parser.add_argument("--train-scores-out", type=Path, nargs="+")
+    parser.add_argument("--test-scores-out", type=Path, nargs="+")
     parser.add_argument("--radius", default=40, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
+    parser.add_argument("--score-batch-size", default=8192, type=int)
+    parser.add_argument("--sparse-scores", action="store_true")
     parser.add_argument("--negatives-per-positive", default=5, type=int)
+    parser.add_argument("--min-intron-bp", type=int)
+    parser.add_argument("--require-3n-cds", dest="require_3n_cds", action="store_true")
+    parser.add_argument("--allow-non-3n-cds", dest="require_3n_cds", action="store_false")
+    parser.set_defaults(require_3n_cds=None)
     args = parser.parse_args()
+
+    apply_profile_defaults(args)
+    if args.min_intron_bp is None:
+        args.min_intron_bp = 20
+    if args.require_3n_cds is None:
+        args.require_3n_cds = True
+    validate_required_args(args)
 
     global torch, nn, DataLoader, TensorDataset, SpliceCNN, one_hot_encode_windows
     import torch
@@ -354,8 +487,8 @@ def main() -> None:
             donors, acceptors = splice_sites_from_gff(
                 gff_path,
                 dataset.offsets,
-                min_intron_bp=20,
-                require_3n_cds=True,
+                min_intron_bp=args.min_intron_bp,
+                require_3n_cds=args.require_3n_cds,
             )
             donor_total += len(donors)
             acceptor_total += len(acceptors)
@@ -384,9 +517,15 @@ def main() -> None:
         torch.save(model.state_dict(), args.model_out)
 
     for dataset, score_path in zip(train_datasets, args.train_scores_out):
-        write_scores(model, dataset, args.radius, score_path, args.batch_size)
+        if args.sparse_scores:
+            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+        else:
+            write_scores(model, dataset, args.radius, score_path, args.score_batch_size)
     for dataset, score_path in zip(test_datasets, args.test_scores_out):
-        write_scores(model, dataset, args.radius, score_path, args.batch_size)
+        if args.sparse_scores:
+            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+        else:
+            write_scores(model, dataset, args.radius, score_path, args.score_batch_size)
     log("finished splice CNN score pipeline")
 
 

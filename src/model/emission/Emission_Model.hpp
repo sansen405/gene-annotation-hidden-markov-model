@@ -121,6 +121,10 @@ namespace gene_hmm {
         Log_Prob emission_log_prob(State state, size_t t, const vector<Nucleotide>& nucleotides) const;
 
         void load_splice_cnn_scores(const string& score_path, size_t sequence_length);
+        void load_splice_cnn_scores(
+            const vector<string>& score_paths,
+            const vector<size_t>& offsets,
+            size_t sequence_length);
         void set_splice_cnn_position_offset(size_t offset);
 
     private:

@@ -11,6 +11,18 @@ namespace gene_hmm {
     Genome_Profile profile;
 
     namespace {
+        vector<string> parse_string_list(const json& value) {
+            vector<string> paths;
+            if (value.is_string()) {
+                paths.push_back(value.get<string>());
+                return paths;
+            }
+            for (const auto& item : value) {
+                paths.push_back(item.get<string>());
+            }
+            return paths;
+        }
+
         Species_Dataset parse_species_dataset(const json& dataset) {
             Species_Dataset species;
             species.name = dataset.value("name", "");
@@ -57,6 +69,17 @@ namespace gene_hmm {
             p.test_gff_path     = first.test_gff_path;
             p.test_chromosomes  = first.test_chromosomes;
             p.excluded_chromosomes = first.excluded_chromosomes;
+        }
+
+        if (j.contains("splice_cnn")) {
+            const auto& splice_cnn = j["splice_cnn"];
+            p.splice_cnn.model_path = splice_cnn.value("model", "");
+            if (splice_cnn.contains("train_scores")) {
+                p.splice_cnn.train_score_paths = parse_string_list(splice_cnn["train_scores"]);
+            }
+            if (splice_cnn.contains("test_scores")) {
+                p.splice_cnn.test_score_paths = parse_string_list(splice_cnn["test_scores"]);
+            }
         }
 
         p.min_first_cds_bp     = j["filters"]["min_first_cds_bp"];

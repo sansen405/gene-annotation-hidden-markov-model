@@ -227,9 +227,7 @@ bool has_help_arg(int argc, char** argv) {
 
 void print_usage(const string& program_name) {
     cerr << "Usage: " << program_name
-         << " [--profile PATH] [--out-dir DIR]\n\n"
-         << "Defaults:\n"
-         << "  --profile src/genome_profiles/fission_yeasts.json\n"
+         << " --profile PATH [--out-dir DIR]\n\n"
          << "  --out-dir src/model/training_pipeline/trained_models/<profile-name>\n";
 }
 
@@ -246,7 +244,11 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/fission_yeasts.json");
+        string profile_path = value_after_arg(argc, argv, "--profile", "");
+        if (profile_path.empty()) {
+            print_usage(argv[0]);
+            return 1;
+        }
         gene_hmm::profile = Genome_Profile::load(profile_path);
 
         string default_out_dir = "src/model/training_pipeline/trained_models/" + gene_hmm::profile.name;

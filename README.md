@@ -329,6 +329,12 @@ emission artifact stores the trained HMM emission tables and points donor/
 acceptor emissions at the CNN checkpoint and per-position score files from the
 profile.
 
+By default, CNN score generation writes sparse score TSVs for canonical splice
+candidate positions only (`GT` donor candidates and `AG` acceptor candidates).
+This is much faster than scoring every base and is compatible with the current
+decoder because donor/acceptor emissions already reject noncanonical motifs. To
+force dense every-base score TSVs, add `--dense-cnn-scores`.
+
 Build the JSON decoder:
 
 ```sh
@@ -441,6 +447,23 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 `src/tools/predict_fna.cpp`. The predictor requires `--splice-cnn-scores` when
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
+
+## Model Changes (2.3): Sparse CNN Scoring
+
+- **CNN score generation is sparse by default.**
+  The training pipeline writes donor/acceptor score TSV rows only for canonical
+  splice candidates (`GT` donor positions and `AG` acceptor positions) instead
+  of every base in the genome.
+- **Sparse score files use the same generalized CNN checkpoint.**
+  The model is still trained once across all four fission yeast species; sparse
+  scoring only changes how the trained CNN is applied to each FASTA.
+- **Decoding remains compatible with sparse scores.**
+  `Emission_Model` already rejects noncanonical donor/acceptor motifs before
+  reading CNN scores, and `Splice_CNN_Scores` leaves missing positions at the
+  neutral default.
+- **Dense scoring is still available for debugging.**
+  Add `--dense-cnn-scores` to `train_cached_model.py` to force the old every-base
+  score TSV behavior.
 
 ## Model Changes (2.2): Cached Training Pipeline
 

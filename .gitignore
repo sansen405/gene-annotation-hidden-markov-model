@@ -16,8 +16,8 @@ __pycache__/
 **/__pycache__/
 *.pyc
 
-# Local CNN training artifacts.
-genome_data/fission_yeasts/**/*.tsv
+# Local CNN training artifacts (keep test scores, ignore train scores).
+genome_data/fission_yeasts/**/train/*.tsv
 src/model/cnn/trained_models/*
 !src/model/cnn/trained_models/.gitkeep
 src/model/CNN/trained_models/*
@@ -25,3 +25,6 @@ src/model/CNN/trained_models/*
 src/model/training_pipeline/trained_models/*
 !src/model/training_pipeline/trained_models/.gitkeep
 src/model/cnn/*_scores.tsv
+
+# Generated validation outputs can exceed GitHub's file size limit.
+validation/results/fission_yeasts_cnn_s_pombe.txt

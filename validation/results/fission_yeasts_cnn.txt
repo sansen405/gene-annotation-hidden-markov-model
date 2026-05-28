@@ -1,0 +1,48 @@
+Loading validation profile: fission_yeasts
+Species datasets: 4
+  s_pombe
+    train FASTA: genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna
+    train GFF:   genome_data/fission_yeasts/s_pombe/train/s_pombe_train.gff
+    test FASTA:  genome_data/fission_yeasts/s_pombe/test/s_pombe_test.fna
+    test GFF:    genome_data/fission_yeasts/s_pombe/test/s_pombe_test.gff
+  s_japonicus
+    train FASTA: genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna
+    train GFF:   genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.gff
+    test FASTA:  genome_data/fission_yeasts/s_japonicus/test/s_japonicus_test.fna
+    test GFF:    genome_data/fission_yeasts/s_japonicus/test/s_japonicus_test.gff
+  s_octosporus
+    train FASTA: genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.fna
+    train GFF:   genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.gff
+    test FASTA:  genome_data/fission_yeasts/s_octosporus/test/s_octosporus_test.fna
+    test GFF:    genome_data/fission_yeasts/s_octosporus/test/s_octosporus_test.gff
+  s_cryophilus
+    train FASTA: genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.fna
+    train GFF:   genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.gff
+    test FASTA:  genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_test.fna
+    test GFF:    genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_test.gff
+Training chromosomes: 66
+Evaluation chromosomes: 4
+Usable training intervals: 6448
+Usable evaluation intervals: 3783
+
+Decoding usable evaluation intervals
+
+=== Full Genome Holdout Validation ===
+Metric                               Value
+Evaluated bases                   11746239
+Exact 21-state accuracy             0.9445
+Illegal transitions                      0
+Predicted gene intervals              4493
+Gold gene intervals                   3694
+Intron length cap p95                  196
+Gene start penalty                  1.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9521      0.9553      0.9537      0.9588   4977620    250624    233092   6284903
+intron            0.8848      0.3751      0.5268      0.9826    113788     14816    189578  11428057
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.6205      0.7547        2788        4493        3694
+stop              0.7205      0.8763        3237        4493        3694

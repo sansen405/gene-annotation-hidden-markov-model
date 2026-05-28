@@ -30,10 +30,17 @@ namespace gene_hmm {
         vector<string> excluded_chromosomes;
     };
 
+    struct Splice_CNN_Config {
+        string model_path;
+        vector<string> train_score_paths;
+        vector<string> test_score_paths;
+    };
+
     struct Genome_Profile {
         string name;
 
         vector<Species_Dataset> species;
+        Splice_CNN_Config splice_cnn;
 
         string source_fasta_path;
         string source_gff_path;

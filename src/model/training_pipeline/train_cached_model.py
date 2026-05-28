@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import time
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_PROFILE = REPO_ROOT / "src/genome_profiles/fission_yeasts.json"
 DEFAULT_BINARY = Path("/tmp/train_hmm_matrices")
 
 
@@ -45,43 +43,25 @@ def compile_hmm_trainer(binary_path: Path, cxx: str) -> None:
     )
 
 
-def refresh_cnn_scores(profile_path: Path, python: str) -> None:
-    with profile_path.open() as handle:
-        profile = json.load(handle)
-
-    dataset = profile["dataset"]
-    splice_cnn = profile["splice_cnn"]
-    species = dataset.get("species")
-    if species is None:
-        species = [dataset]
-
-    train_fastas = [item["train_fasta"] for item in species]
-    train_gffs = [item["train_gff"] for item in species]
-    test_fastas = [item["test_fasta"] for item in species]
-    train_scores = splice_cnn["train_scores"]
-    test_scores = splice_cnn["test_scores"]
-    if isinstance(train_scores, str):
-        train_scores = [train_scores]
-    if isinstance(test_scores, str):
-        test_scores = [test_scores]
+def refresh_cnn_scores(
+    profile_path: Path,
+    python: str,
+    score_batch_size: int,
+    sparse_scores: bool,
+) -> None:
+    command = [
+        python,
+        "src/model/cnn/train_splice_cnn_scores.py",
+        "--profile",
+        str(profile_path.relative_to(REPO_ROOT) if profile_path.is_relative_to(REPO_ROOT) else profile_path),
+        "--score-batch-size",
+        str(score_batch_size),
+    ]
+    if sparse_scores:
+        command.append("--sparse-scores")
 
     run(
-        [
-            python,
-            "src/model/cnn/train_splice_cnn_scores.py",
-            "--train-fasta",
-            *train_fastas,
-            "--train-gff",
-            *train_gffs,
-            "--test-fasta",
-            *test_fastas,
-            "--model-out",
-            splice_cnn["model"],
-            "--train-scores-out",
-            *train_scores,
-            "--test-scores-out",
-            *test_scores,
-        ],
+        command,
         "training/loading CNN and refreshing splice score files",
     )
 
@@ -90,11 +70,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Train/cache the CNN-backed HMM transition and emission artifacts."
     )
-    parser.add_argument("--profile", default=DEFAULT_PROFILE, type=Path)
+    parser.add_argument("--profile", required=True, type=Path)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--binary", default=DEFAULT_BINARY, type=Path)
     parser.add_argument("--python", default="python3")
     parser.add_argument("--cxx", default="clang++")
+    parser.add_argument("--cnn-score-batch-size", default=8192, type=int)
+    parser.add_argument("--dense-cnn-scores", action="store_true")
     parser.add_argument("--skip-cnn", action="store_true")
     parser.add_argument("--skip-compile", action="store_true")
     args = parser.parse_args()
@@ -105,7 +87,12 @@ def main() -> None:
 
     log(f"starting cached model pipeline profile={profile_path}")
     if not args.skip_cnn:
-        refresh_cnn_scores(profile_path, args.python)
+        refresh_cnn_scores(
+            profile_path,
+            args.python,
+            args.cnn_score_batch_size,
+            sparse_scores=not args.dense_cnn_scores,
+        )
     else:
         log("skipping CNN score refresh")
 

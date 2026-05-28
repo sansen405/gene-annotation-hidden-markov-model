@@ -13,6 +13,7 @@ namespace gene_hmm {
         Splice_CNN_Scores();
 
         bool load_scores(const string& score_path, size_t sequence_length);
+        bool load_scores(const vector<string>& score_paths, const vector<size_t>& offsets, size_t sequence_length);
 
         Log_Prob donor_log_odds(size_t position) const;
         Log_Prob acceptor_log_odds(size_t position) const;

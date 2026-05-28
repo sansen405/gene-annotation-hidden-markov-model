@@ -386,10 +386,13 @@ namespace gene_hmm {
 int main(int argc, char** argv) {
     try {
         string input_fna = value_after_arg(argc, argv, "--fna", "");
-        string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/fission_yeasts.json");
+        string profile_path = value_after_arg(argc, argv, "--profile", "");
         string splice_cnn_scores_path = value_after_arg(argc, argv, "--splice-cnn-scores", "");
         if(input_fna.empty()){
             throw runtime_error("--fna PATH is required.");
+        }
+        if(profile_path.empty()){
+            throw runtime_error("--profile PATH is required.");
         }
 
         gene_hmm::profile = Genome_Profile::load(profile_path);
