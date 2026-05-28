@@ -347,6 +347,7 @@ int main(int argc, char** argv) {
     try {
         string input_fna = value_after_arg(argc, argv, "--fna", "");
         string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/fission_yeasts.json");
+        string splice_cnn_scores_path = value_after_arg(argc, argv, "--splice-cnn-scores", "");
         if(input_fna.empty()){
             throw runtime_error("--fna PATH is required.");
         }
@@ -369,6 +370,10 @@ int main(int argc, char** argv) {
 
         vector<Nucleotide> input_nucleotides = FNA_Parser::parse_sequence(input_fna);
         vector<Chromosome_Range> input_ranges = FNA_Parser::get_chromosome_ranges(input_fna);
+        if(splice_cnn_scores_path.empty()){
+            throw runtime_error("--splice-cnn-scores PATH is required for CNN donor/acceptor emissions.");
+        }
+        emission_model.load_splice_cnn_scores(splice_cnn_scores_path, input_nucleotides.size());
 
         json result;
         result["summary"] = {
@@ -384,6 +389,7 @@ int main(int argc, char** argv) {
         result["confidenceByScaffold"] = json::object();
 
         for(const auto& range : input_ranges){
+            emission_model.set_splice_cnn_position_offset(range.start);
             vector<Nucleotide> chromosome_nucleotides = slice_nucleotides(input_nucleotides, range.start, range.end);
             vector<State> chromosome_states = Viterbi::decode(
                 chromosome_nucleotides,

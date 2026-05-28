@@ -2,36 +2,85 @@ from __future__ import annotations
 
 import argparse
 import random
+import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import torch
-from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
-
-from splice_cnn_network import SpliceCNN, one_hot_encode_windows
+if TYPE_CHECKING:
+    import torch
+    from splice_cnn_network import SpliceCNN
 
 
-def read_fasta(path: Path) -> tuple[str, dict[str, int]]:
-    sequence_parts: list[str] = []
+@dataclass(frozen=True)
+class FastaRecord:
+    name: str
+    sequence: str
+    offset: int
+
+
+@dataclass(frozen=True)
+class FastaDataset:
+    path: Path
+    records: list[FastaRecord]
+    offsets: dict[str, int]
+
+    @property
+    def sequence(self) -> str:
+        return "".join(record.sequence for record in self.records)
+
+    @property
+    def base_count(self) -> int:
+        return sum(len(record.sequence) for record in self.records)
+
+
+def log(message: str) -> None:
+    print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+
+
+def format_count(value: int) -> str:
+    return f"{value:,}"
+
+
+def read_fasta(path: Path) -> FastaDataset:
+    records: list[FastaRecord] = []
     offsets: dict[str, int] = {}
     current_name: str | None = None
-    current_length = 0
+    current_parts: list[str] = []
+    current_offset = 0
 
+    def flush_record() -> None:
+        nonlocal current_name, current_parts, current_offset
+        if current_name is None:
+            return
+        sequence = "".join(current_parts)
+        records.append(FastaRecord(current_name, sequence, current_offset))
+        current_offset += len(sequence)
+        current_parts = []
+
+    log(f"loading FASTA: {path}")
+    start_time = time.perf_counter()
     with path.open() as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line:
                 continue
             if line.startswith(">"):
-                if current_name is not None:
-                    current_length = len("".join(sequence_parts))
+                flush_record()
                 current_name = line[1:].split()[0]
-                offsets[current_name] = current_length
+                offsets[current_name] = current_offset
                 continue
-            sequence_parts.append(line.upper())
+            current_parts.append(line.upper())
 
-    return "".join(sequence_parts), offsets
+    flush_record()
+    dataset = FastaDataset(path=path, records=records, offsets=offsets)
+    log(
+        f"loaded FASTA: {path} "
+        f"records={format_count(len(dataset.records))} bases={format_count(dataset.base_count)} "
+        f"elapsed={time.perf_counter() - start_time:.1f}s"
+    )
+    return dataset
 
 
 def parent_id(attributes: str) -> str:
@@ -50,6 +99,8 @@ def splice_sites_from_gff(
     cds_by_parent: dict[str, list[tuple[int, int]]] = defaultdict(list)
     supported_parent: dict[str, bool] = defaultdict(lambda: True)
 
+    log(f"loading splice sites from GFF: {gff_path}")
+    start_time = time.perf_counter()
     with gff_path.open() as handle:
         for raw_line in handle:
             if not raw_line.strip() or raw_line.startswith("#"):
@@ -95,6 +146,10 @@ def splice_sites_from_gff(
             donors.add(left[1] + 1)
             acceptors.add(right[0] - 1)
 
+    log(
+        f"loaded splice sites: donors={format_count(len(donors))} "
+        f"acceptors={format_count(len(acceptors))} elapsed={time.perf_counter() - start_time:.1f}s"
+    )
     return donors, acceptors
 
 
@@ -109,38 +164,74 @@ def window_at(sequence: str, center: int, radius: int) -> str:
 
 
 def sample_training_examples(
-    sequence: str,
+    dataset: FastaDataset,
     donors: set[int],
     acceptors: set[int],
     radius: int,
     negatives_per_positive: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    log(f"sampling examples from {dataset.path}")
+    start_time = time.perf_counter()
     positives = sorted(donors | acceptors)
     positive_set = set(positives)
-    candidate_negatives = [
-        pos
-        for pos in range(1, len(sequence) - 1)
-        if pos not in positive_set
-        and (
-            sequence[pos : pos + 2] == "GT"
-            or sequence[pos - 1 : pos + 1] == "AG"
-        )
-    ]
+    candidate_negatives: list[tuple[FastaRecord, int, int]] = []
+    positive_sites_by_record: dict[str, list[int]] = defaultdict(list)
+    total_bases = dataset.base_count
+    scanned_bases = 0
+    next_progress = 10
+
+    for record in dataset.records:
+        record_start = record.offset
+        record_end = record.offset + len(record.sequence)
+        positive_sites_by_record[record.name] = [
+            pos for pos in positives if record_start <= pos < record_end
+        ]
+        for local_pos in range(1, len(record.sequence) - 1):
+            global_pos = record.offset + local_pos
+            if global_pos in positive_set:
+                continue
+            if (
+                record.sequence[local_pos : local_pos + 2] == "GT"
+                or record.sequence[local_pos - 1 : local_pos + 1] == "AG"
+            ):
+                candidate_negatives.append((record, local_pos, global_pos))
+        scanned_bases += len(record.sequence)
+        progress = int((scanned_bases / max(1, total_bases)) * 100)
+        if progress >= next_progress:
+            log(
+                f"scanned negative candidates: {min(progress, 100)}% "
+                f"candidates={format_count(len(candidate_negatives))}"
+            )
+            next_progress += 10
 
     rng = random.Random(7)
     negative_count = min(len(candidate_negatives), len(positives) * negatives_per_positive)
     negatives = rng.sample(candidate_negatives, negative_count)
+    log(
+        f"selected examples: positives={format_count(len(positives))} "
+        f"negatives={format_count(len(negatives))}"
+    )
 
     windows: list[str] = []
     labels: list[list[float]] = []
-    for pos in positives:
-        windows.append(window_at(sequence, pos, radius))
-        labels.append([1.0 if pos in donors else 0.0, 1.0 if pos in acceptors else 0.0])
-    for pos in negatives:
-        windows.append(window_at(sequence, pos, radius))
+    for record in dataset.records:
+        for pos in positive_sites_by_record[record.name]:
+            local_pos = pos - record.offset
+            windows.append(window_at(record.sequence, local_pos, radius))
+            labels.append([1.0 if pos in donors else 0.0, 1.0 if pos in acceptors else 0.0])
+    for record, local_pos, _ in negatives:
+        windows.append(window_at(record.sequence, local_pos, radius))
         labels.append([0.0, 0.0])
 
-    return one_hot_encode_windows(windows), torch.tensor(labels, dtype=torch.float32)
+    if not windows:
+        window_size = radius * 2 + 1
+        return torch.empty((0, 4, window_size), dtype=torch.float32), torch.empty((0, 2), dtype=torch.float32)
+
+    log(f"encoding windows: count={format_count(len(windows))} width={radius * 2 + 1}")
+    inputs = one_hot_encode_windows(windows)
+    label_tensor = torch.tensor(labels, dtype=torch.float32)
+    log(f"finished examples from {dataset.path} elapsed={time.perf_counter() - start_time:.1f}s")
+    return inputs, label_tensor
 
 
 def train_model(
@@ -153,77 +244,150 @@ def train_model(
     loader = DataLoader(TensorDataset(inputs, labels), batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.BCEWithLogitsLoss()
+    total_batches = len(loader)
 
+    log(
+        f"starting CNN training: examples={format_count(len(inputs))} "
+        f"epochs={epochs} batch_size={batch_size} batches_per_epoch={format_count(total_batches)}"
+    )
     model.train()
     for epoch in range(epochs):
+        epoch_start = time.perf_counter()
         total_loss = 0.0
-        for batch_inputs, batch_labels in loader:
+        progress_interval = max(1, total_batches // 10)
+        for batch_index, (batch_inputs, batch_labels) in enumerate(loader, start=1):
             optimizer.zero_grad()
             loss = loss_fn(model(batch_inputs), batch_labels)
             loss.backward()
             optimizer.step()
             total_loss += float(loss.item()) * batch_inputs.size(0)
-        print(f"epoch={epoch + 1} loss={total_loss / len(inputs):.4f}")
+            if batch_index == total_batches or batch_index % progress_interval == 0:
+                log(f"epoch {epoch + 1}/{epochs}: batch {batch_index}/{total_batches}")
+        log(
+            f"finished epoch {epoch + 1}/{epochs}: "
+            f"loss={total_loss / len(inputs):.4f} elapsed={time.perf_counter() - epoch_start:.1f}s"
+        )
 
 
-def write_scores(model: SpliceCNN, sequence: str, radius: int, output_path: Path, batch_size: int) -> None:
+def write_scores(model: SpliceCNN, dataset: FastaDataset, radius: int, output_path: Path, batch_size: int) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    log(
+        f"writing scores: input={dataset.path} output={output_path} "
+        f"bases={format_count(dataset.base_count)}"
+    )
+    start_time = time.perf_counter()
+    written_bases = 0
+    next_progress = 10
     with output_path.open("w") as output, torch.no_grad():
-        for start in range(0, len(sequence), batch_size):
-            end = min(start + batch_size, len(sequence))
-            windows = [window_at(sequence, pos, radius) for pos in range(start, end)]
-            logits = model(one_hot_encode_windows(windows))
-            for offset, row in enumerate(logits):
-                position = start + offset
-                output.write(f"{position}\t{float(row[0]):.8f}\t{float(row[1]):.8f}\n")
+        for record in dataset.records:
+            for start in range(0, len(record.sequence), batch_size):
+                end = min(start + batch_size, len(record.sequence))
+                windows = [window_at(record.sequence, pos, radius) for pos in range(start, end)]
+                logits = model(one_hot_encode_windows(windows))
+                for offset, row in enumerate(logits):
+                    position = record.offset + start + offset
+                    output.write(f"{position}\t{float(row[0]):.8f}\t{float(row[1]):.8f}\n")
+                written_bases += end - start
+                progress = int((written_bases / max(1, dataset.base_count)) * 100)
+                if progress >= next_progress:
+                    log(f"score writing progress for {output_path}: {min(progress, 100)}%")
+                    next_progress += 10
+    log(f"finished scores: {output_path} elapsed={time.perf_counter() - start_time:.1f}s")
+
+
+def validate_matching_counts(label: str, left: list[Path], right: list[Path]) -> None:
+    if len(left) != len(right):
+        raise ValueError(f"Expected the same number of {label} FASTA and GFF paths.")
+
+
+def validate_output_counts(label: str, inputs: list[Path], outputs: list[Path]) -> None:
+    if len(inputs) != len(outputs):
+        raise ValueError(f"Expected one {label} score output path per {label} FASTA.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a splice-site CNN and write HMM emission scores.")
-    parser.add_argument("--train-fasta", required=True, type=Path)
-    parser.add_argument("--train-gff", required=True, type=Path)
-    parser.add_argument("--test-fasta", required=True, type=Path)
-    parser.add_argument("--model-out", required=True, type=Path)
-    parser.add_argument("--train-scores-out", required=True, type=Path)
-    parser.add_argument("--test-scores-out", required=True, type=Path)
+    parser.add_argument("--train-fasta", required=True, type=Path, nargs="+")
+    parser.add_argument("--train-gff", required=True, type=Path, nargs="+")
+    parser.add_argument("--test-fasta", required=True, type=Path, nargs="+")
+    parser.add_argument(
+        "--model-out",
+        default=Path(__file__).resolve().parent / "trained_models" / "fission_yeasts_splice_cnn.pt",
+        type=Path,
+    )
+    parser.add_argument("--train-scores-out", required=True, type=Path, nargs="+")
+    parser.add_argument("--test-scores-out", required=True, type=Path, nargs="+")
     parser.add_argument("--radius", default=40, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--negatives-per-positive", default=5, type=int)
     args = parser.parse_args()
 
-    train_sequence, train_offsets = read_fasta(args.train_fasta)
-    test_sequence, _ = read_fasta(args.test_fasta)
+    global torch, nn, DataLoader, TensorDataset, SpliceCNN, one_hot_encode_windows
+    import torch
+    from splice_cnn_network import SpliceCNN, one_hot_encode_windows
+    from torch import nn
+    from torch.utils.data import DataLoader, TensorDataset
+
+    validate_matching_counts("training", args.train_fasta, args.train_gff)
+    validate_output_counts("training", args.train_fasta, args.train_scores_out)
+    validate_output_counts("test", args.test_fasta, args.test_scores_out)
+
+    log("starting splice CNN score pipeline")
+    log(f"model checkpoint: {args.model_out}")
+    train_datasets = [read_fasta(path) for path in args.train_fasta]
+    test_datasets = [read_fasta(path) for path in args.test_fasta]
     model = SpliceCNN(window_size=args.radius * 2 + 1)
 
     if args.model_out.exists():
-        print(f"loading existing model: {args.model_out}")
+        log(f"loading existing CNN checkpoint: {args.model_out}")
         model.load_state_dict(torch.load(args.model_out, map_location="cpu"))
     else:
-        donors, acceptors = splice_sites_from_gff(
-            args.train_gff,
-            train_offsets,
-            min_intron_bp=20,
-            require_3n_cds=True,
-        )
+        input_batches: list[torch.Tensor] = []
+        label_batches: list[torch.Tensor] = []
+        donor_total = 0
+        acceptor_total = 0
 
-        print(f"training donors={len(donors)} acceptors={len(acceptors)}")
-        inputs, labels = sample_training_examples(
-            train_sequence,
-            donors,
-            acceptors,
-            args.radius,
-            args.negatives_per_positive,
-        )
+        for dataset, gff_path in zip(train_datasets, args.train_gff):
+            donors, acceptors = splice_sites_from_gff(
+                gff_path,
+                dataset.offsets,
+                min_intron_bp=20,
+                require_3n_cds=True,
+            )
+            donor_total += len(donors)
+            acceptor_total += len(acceptors)
+            inputs, labels = sample_training_examples(
+                dataset,
+                donors,
+                acceptors,
+                args.radius,
+                args.negatives_per_positive,
+            )
+            if len(labels) > 0:
+                input_batches.append(inputs)
+                label_batches.append(labels)
+
+        if not input_batches:
+            raise ValueError("No splice-site examples were found in the training inputs.")
+
+        log(f"training totals: donors={format_count(donor_total)} acceptors={format_count(acceptor_total)}")
+        log("combining training tensors")
+        inputs = torch.cat(input_batches)
+        labels = torch.cat(label_batches)
 
         train_model(model, inputs, labels, args.epochs, args.batch_size)
         args.model_out.parent.mkdir(parents=True, exist_ok=True)
+        log(f"saving CNN checkpoint: {args.model_out}")
         torch.save(model.state_dict(), args.model_out)
 
-    write_scores(model, train_sequence, args.radius, args.train_scores_out, args.batch_size)
-    write_scores(model, test_sequence, args.radius, args.test_scores_out, args.batch_size)
+    for dataset, score_path in zip(train_datasets, args.train_scores_out):
+        write_scores(model, dataset, args.radius, score_path, args.batch_size)
+    for dataset, score_path in zip(test_datasets, args.test_scores_out):
+        write_scores(model, dataset, args.radius, score_path, args.batch_size)
+    log("finished splice CNN score pipeline")
 
 
 if __name__ == "__main__":

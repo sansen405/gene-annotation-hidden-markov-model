@@ -29,6 +29,10 @@ Gene_Analysis_HMM/
 │   │   ├── emission/
 │   │   │   ├── Emission_Model.hpp
 │   │   │   └── Emission_Model.cpp
+│   │   ├── training_pipeline/
+│   │   │   ├── train_cached_model.py
+│   │   │   ├── train_hmm_matrices.cpp
+│   │   │   └── trained_models/     # local cached HMM artifacts, gitignored
 │   │   └── cnn/
 │   │       ├── Splice_CNN_Scores.hpp/.cpp
 │   │       ├── splice_cnn_network.py
@@ -100,6 +104,14 @@ Defines the shared vocabulary used across the project:
   per-position score TSV files.
 - **`Splice_CNN_Scores`** — C++ bridge that loads those score TSV files and
   exposes donor/acceptor log-odds to `Emission_Model`.
+
+### `src/model/training_pipeline/`
+- **`train_cached_model.py`** — one-command local cache refresh. It trains or
+  reloads the CNN checkpoint, regenerates CNN score TSVs, compiles the HMM
+  matrix trainer, and writes cached transition/emission artifacts.
+- **`train_hmm_matrices.cpp`** — trains the HMM transition matrix and reusable
+  emission tables from the profile train FASTA/GFF and saves them as JSON under
+  `trained_models/<profile>/`.
 
 Emission summary:
 
@@ -258,7 +270,6 @@ python3 src/model/cnn/train_splice_cnn_scores.py \
   --train-fasta genome_data/fission_yeasts/train/fission_yeasts_train.fna \
   --train-gff genome_data/fission_yeasts/train/fission_yeasts_train.gff \
   --test-fasta genome_data/fission_yeasts/test/fission_yeasts_test.fna \
-  --model-out src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt \
   --train-scores-out genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv \
   --test-scores-out genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv
 ```
@@ -266,6 +277,76 @@ python3 src/model/cnn/train_splice_cnn_scores.py \
 If the `.pt` checkpoint already exists, the script loads it and only regenerates
 the score TSVs. The checkpoint and generated score files are local artifacts and
 are ignored by git.
+
+To refresh the whole cached model pipeline in one step:
+
+```sh
+python3 src/model/training_pipeline/train_cached_model.py \
+  --profile src/genome_profiles/fission_yeasts.json
+```
+
+This writes local artifacts under
+`src/model/training_pipeline/trained_models/fission_yeasts/`:
+`transition_matrix.json`, `emission_matrix.json`, and `metadata.json`. The
+emission artifact stores the trained HMM emission tables and points donor/
+acceptor emissions at the CNN checkpoint and per-position score files from the
+profile.
+
+Build the JSON decoder:
+
+```sh
+clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
+  src/tools/predict_fna.cpp \
+  src/decoding/Viterbi.cpp \
+  src/decoding/Forward_Backward.cpp \
+  src/model/transition/Transition_Model.cpp \
+  src/genome_profiles/Genome_Profile.cpp \
+  src/parsers/FNA_Parser.cpp \
+  src/parsers/GFF_Parser.cpp \
+  src/model/emission/Emission_Model.cpp \
+  src/model/cnn/Splice_CNN_Scores.cpp \
+  -o /tmp/hmm_predict_fna
+```
+
+To decode one specific chromosome, first write that chromosome to its own FASTA
+and generate matching CNN scores from the cached CNN checkpoint:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+
+chrom = "NC_003424.3"
+source = Path("genome_data/fission_yeasts/test/fission_yeasts_test.fna")
+out = Path(f"/tmp/{chrom}.fna")
+writing = False
+
+with source.open() as input_file, out.open("w") as output_file:
+    for line in input_file:
+        if line.startswith(">"):
+            writing = line[1:].split()[0] == chrom
+        if writing:
+            output_file.write(line)
+
+print(out)
+PY
+
+python3 src/model/cnn/train_splice_cnn_scores.py \
+  --train-fasta genome_data/fission_yeasts/train/fission_yeasts_train.fna \
+  --train-gff genome_data/fission_yeasts/train/fission_yeasts_train.gff \
+  --test-fasta /tmp/NC_003424.3.fna \
+  --train-scores-out /tmp/fission_yeasts_train_splice_cnn_scores.tsv \
+  --test-scores-out /tmp/NC_003424.3_splice_cnn_scores.tsv
+```
+
+Then run the decoder on that chromosome:
+
+```sh
+/tmp/hmm_predict_fna \
+  --profile src/genome_profiles/fission_yeasts.json \
+  --fna /tmp/NC_003424.3.fna \
+  --splice-cnn-scores /tmp/NC_003424.3_splice_cnn_scores.tsv \
+  > /tmp/NC_003424.3_predictions.json
+```
 
 Run validation with an explicit profile:
 
@@ -311,6 +392,29 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 `src/tools/predict_fna.cpp`. The predictor requires `--splice-cnn-scores` when
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
+
+## Model Changes (2.2): Cached Training Pipeline
+
+- **The full training pipeline can be refreshed with one command.**
+  `src/model/training_pipeline/train_cached_model.py` trains or reloads the CNN,
+  regenerates splice-score TSVs, compiles the HMM matrix trainer, and writes the
+  cached HMM artifacts.
+- **Trained HMM artifacts are saved locally.**
+  `src/model/training_pipeline/train_hmm_matrices.cpp` writes
+  `transition_matrix.json`, `emission_matrix.json`, and `metadata.json` under
+  `src/model/training_pipeline/trained_models/<profile>/`.
+- **CNN splice emissions are part of the cached model metadata.**
+  The emission artifact stores the reusable HMM emission tables and records the
+  CNN checkpoint plus train/test splice-score paths used for donor/acceptor
+  emissions.
+- **Generated model artifacts stay out of git.**
+  The cache folders keep `.gitkeep` placeholders, while local `.pt`, score TSV,
+  and trained matrix artifacts are ignored so large retrained outputs are not
+  committed accidentally.
+- **Training output now reports progress.**
+  The CNN trainer logs FASTA/GFF loading, negative sampling, window encoding,
+  epoch/batch progress, checkpoint saves, and score-writing progress so long
+  runs do not appear stalled.
 
 ## Model Changes (2.1): HMM + CNN Emissions
 
