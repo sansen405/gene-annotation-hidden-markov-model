@@ -1,0 +1,51 @@
+{
+    "name": "fission_yeasts",
+    "description": "Combined Schizosaccharomyces profile: S. pombe, S. japonicus, S. octosporus, and S. cryophilus",
+
+    "dataset": {
+        "source_fasta": "genome_data/fission_yeasts/full/fission_yeasts_genomic.fna",
+        "source_gff":   "genome_data/fission_yeasts/full/fission_yeasts_genomic.gff",
+        "train_fasta":  "genome_data/fission_yeasts/train/fission_yeasts_train.fna",
+        "train_gff":    "genome_data/fission_yeasts/train/fission_yeasts_train.gff",
+        "test_fasta":   "genome_data/fission_yeasts/test/fission_yeasts_test.fna",
+        "test_gff":     "genome_data/fission_yeasts/test/fission_yeasts_test.gff",
+        "test_chromosomes": [
+            "NC_003424.3",
+            "KE651166.1",
+            "KE503206.1",
+            "KE546988.1"
+        ],
+        "excluded_chromosomes": [
+            "NC_001326.1"
+        ]
+    },
+
+    "splice_cnn": {
+        "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+        "train_scores": "genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv",
+        "test_scores": "genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv"
+    },
+
+    "filters": {
+        "min_first_cds_bp":     3,
+        "min_last_cds_bp":      3,
+        "min_intron_bp":        20,
+        "require_3n_cds":       true,
+        "include_minus_strand": false
+    },
+
+    "emissions": {
+        "INTERGENIC":  { "type": "markov", "order": 1 },
+        "INTRON":      { "type": "markov", "order": 1 },
+        "EXON_FRAME":  { "type": "markov", "order": 5, "frame_tied": true },
+        "DONOR":       { "type": "pssm", "window_left": 3,  "window_right": 6 },
+        "ACCEPTOR":    { "type": "pssm", "window_left": 15, "window_right": 3 },
+        "START_CODON": { "type": "deterministic" },
+        "STOP_CODON":  { "type": "deterministic" }
+    },
+
+    "smoothing": {
+        "transition_alpha": 0.02,
+        "emission_alpha":   0.1
+    }
+}
