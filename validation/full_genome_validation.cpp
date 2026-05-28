@@ -1,7 +1,7 @@
 #include "../src/decoding/Viterbi.hpp"
 #include "../src/genome_profiles/Genome_Profile.hpp"
-#include "../src/model/Emission_Model.hpp"
-#include "../src/model/Transition_Model.hpp"
+#include "../src/model/emission/Emission_Model.hpp"
+#include "../src/model/transition/Transition_Model.hpp"
 #include "../src/parsers/FNA_Parser.hpp"
 #include "../src/parsers/GFF_Parser.hpp"
 #include <algorithm>
@@ -502,7 +502,7 @@ void print_average_emission(
 }
 
 Genome_Profile default_profile() {
-    return Genome_Profile::load("src/genome_profiles/yeast.json");
+    return Genome_Profile::load("src/genome_profiles/fission_yeasts.json");
 }
 
 Genome_Profile manual_profile() {

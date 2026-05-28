@@ -165,7 +165,7 @@ set<string> test_chromosomes_from_profile(const Genome_Profile& profile) {
 
 int main(int argc, char** argv) {
     try {
-        string profile_path = argc > 1 ? argv[1] : "src/genome_profiles/yeast.json";
+        string profile_path = argc > 1 ? argv[1] : "src/genome_profiles/fission_yeasts.json";
         Genome_Profile profile = Genome_Profile::load(profile_path);
 
         if (profile.source_fasta_path.empty() || profile.source_gff_path.empty()) {

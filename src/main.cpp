@@ -7,7 +7,7 @@
 #include "unit_tests/Forward_Backward_Test.hpp"
 
 int main() {
-    gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/yeast.json");
+    gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/fission_yeasts.json");
 
     gene_hmm::run_FNA_Parser_tests();
 

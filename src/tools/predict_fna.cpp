@@ -1,8 +1,8 @@
 #include "../decoding/Forward_Backward.hpp"
 #include "../decoding/Viterbi.hpp"
 #include "../genome_profiles/Genome_Profile.hpp"
-#include "../model/Emission_Model.hpp"
-#include "../model/Transition_Model.hpp"
+#include "../model/emission/Emission_Model.hpp"
+#include "../model/transition/Transition_Model.hpp"
 #include "../parsers/FNA_Parser.hpp"
 #include "../parsers/GFF_Parser.hpp"
 #include <algorithm>
@@ -346,7 +346,7 @@ namespace gene_hmm {
 int main(int argc, char** argv) {
     try {
         string input_fna = value_after_arg(argc, argv, "--fna", "");
-        string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/yeast.json");
+        string profile_path = value_after_arg(argc, argv, "--profile", "src/genome_profiles/fission_yeasts.json");
         if(input_fna.empty()){
             throw runtime_error("--fna PATH is required.");
         }

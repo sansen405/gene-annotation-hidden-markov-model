@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../model/Emission_Model.hpp"
+#include "../model/emission/Emission_Model.hpp"
 #include "../genome_profiles/Genome_Profile.hpp"
 #include "Test_Utils.hpp"
 #include <cmath>

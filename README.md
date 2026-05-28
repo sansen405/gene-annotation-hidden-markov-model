@@ -23,31 +23,32 @@ Gene_Analysis_HMM/
 │   │   ├── GFF_Parser.hpp         # GFF  -> per-base region/state labels
 │   │   └── GFF_Parser.cpp
 │   ├── model/
-│   │   ├── Transition_Model.hpp   # bigram counts -> log-prob transition matrix
-│   │   ├── Transition_Model.cpp
-│   │   ├── Emission_Model.hpp     # emission counts -> log-prob emission tables
-│   │   └── Emission_Model.cpp
+│   │   ├── transition/
+│   │   │   ├── Transition_Model.hpp
+│   │   │   └── Transition_Model.cpp
+│   │   ├── emission/
+│   │   │   ├── Emission_Model.hpp
+│   │   │   └── Emission_Model.cpp
+│   │   └── cnn/
+│   │       ├── Splice_CNN_Scores.hpp/.cpp
+│   │       ├── splice_cnn_network.py
+│   │       ├── train_splice_cnn_scores.py
+│   │       └── trained_models/     # local .pt checkpoints, gitignored
 │   ├── decoding/
 │   │   ├── Viterbi.hpp
 │   │   ├── Viterbi.cpp
 │   │   ├── Forward_Backward.hpp
 │   │   └── Forward_Backward.cpp
+│   ├── tools/
+│   │   ├── predict_fna.cpp        # JSON prediction CLI for uploaded .fna input
+│   │   └── split_genome_data.cpp  # writes train/test FASTA+GFF from a profile
 │   └── genome_profiles/
-│       ├── yeast.json
-│       ├── aspergillus.json
-│       ├── candida.json
-│       ├── cryptococcus.json
-│       ├── neurospora.json
-│       ├── s_pombe.json
-│       └── c_elegans.json
+│       └── fission_yeasts.json
 ├── validation/
 │   ├── full_genome_validation.cpp # train/test holdout validation runner
 │   └── diagnostics/               # extra boundary and intron diagnostics
-├── src/tools/
-│   ├── predict_fna.cpp            # JSON prediction CLI for uploaded .fna input
-│   └── split_genome_data.cpp      # writes train/test FASTA+GFF from a profile
 └── genome_data/
-    └── yeast/
+    └── fission_yeasts/
         ├── full/                  # unsplit source assembly + annotation
         ├── train/                 # training chromosomes only
         └── test/                  # held-out test chromosomes only
@@ -72,21 +73,33 @@ Defines the shared vocabulary used across the project:
   labeling, so unsupported genes do not contribute training or evaluation
   signal.
 
-### `src/model/`
+### `src/model/transition/`
 - **`Transition_Model`** — given the per-base state vector and chromosome
   ranges, counts bigram transitions, computes row sums, and produces a
   log-probability transition matrix with additive (`alpha`) smoothing.
+
+### `src/model/emission/`
 - **`Emission_Model`** — given the per-base state and nucleotide vectors,
-  counts emissions and produces smoothed log-probability tables:
+  counts HMM emissions and combines them with CNN splice-site scores:
   - **Markov order-1** (`INTERGENIC`, `INTRON`) — 4×4 context→emission table.
   - **Frame-specific Markov order-5** (`EXON_FRAME_1/2/3`) — one 1024×4 table
     per coding frame, so the model can use codon periodicity.
-  - **Signal log-odds tables** (`START_CODON`, `DONOR`, `ACCEPTOR`) — short
-    windows are scored against matched background windows instead of raw motif
-    probability.
+  - **CNN splice scores** (`DONOR`, `ACCEPTOR`) — donor/acceptor states require
+    per-position log-odds produced by the PyTorch splice CNN.
+  - **Signal log-odds table** (`START_CODON`) — the start window is scored
+    against matched non-start `ATG` background.
   - **Deterministic** (`START_CODON`, `STOP_CODON`) — returns 0.0 or −∞ based
     on the expected nucleotide context. Stop codons are restricted to `TAA`,
     `TAG`, and `TGA`.
+
+### `src/model/cnn/`
+- **`splice_cnn_network.py`** — PyTorch 1D CNN that scores donor and acceptor
+  splice-site potential from one-hot DNA windows.
+- **`train_splice_cnn_scores.py`** — trains the CNN when no cached checkpoint is
+  present, saves the checkpoint under `trained_models/`, and writes train/test
+  per-position score TSV files.
+- **`Splice_CNN_Scores`** — C++ bridge that loads those score TSV files and
+  exposes donor/acceptor log-odds to `Emission_Model`.
 
 Emission summary:
 
@@ -95,8 +108,8 @@ Emission summary:
 | `INTERGENIC` | Markov order-1 | Previous base | `log P(current base \| previous base)` learned from intergenic sequence. |
 | `INTRON_1/2/3` | Markov order-1 | Previous base | `log P(current base \| previous base)` learned from intron sequence. |
 | `EXON_FRAME_1/2/3` | Frame-specific Markov order-5 | Previous 5 bases | `log P(current base \| 5-base context)` with a separate table for each coding frame. |
-| `DONOR_1/2/3` | Log-odds PSSM | `window_left=3`, `window_right=6` | Requires canonical `GT`, then scores the donor window against non-splice `GT` background. |
-| `ACCEPTOR_1/2/3` | Log-odds PSSM | `window_left=15`, `window_right=3` | Requires canonical `AG`, then scores the acceptor window against non-splice `AG` background. |
+| `DONOR_1/2/3` | CNN log-odds | Per-base score TSV | Requires canonical `GT`, then uses the loaded CNN donor score for that position. |
+| `ACCEPTOR_1/2/3` | CNN log-odds | Per-base score TSV | Requires canonical `AG`, then uses the loaded CNN acceptor score for that position. |
 | `START_CODON_1` | Deterministic motif + log-odds PSSM | Default `window_left=6`, `window_right=9` | Requires full `ATG`, then scores the surrounding start window against non-start `ATG` background. |
 | `START_CODON_2/3` | Deterministic | Current base | Requires the second and third start-codon bases, `T` then `G`. |
 | `STOP_CODON_1/2/3` | Deterministic motif | Three-base stop context | Requires one of `TAA`, `TAG`, or `TGA`. |
@@ -108,21 +121,31 @@ decoder overload with an intron body length cap and a gene-start penalty.
 confidence for a predicted path.
 
 ### `src/genome_profiles/`
-JSON files that fully describe a training/decoding run for one organism:
-input paths, held-out test chromosomes, gene-quality filters, per-state
-emission model choices, and smoothing hyperparameters.
+JSON files that fully describe a training/decoding run: input paths, held-out
+test chromosomes, gene-quality filters, per-state emission model choices, and
+smoothing hyperparameters.
 
-Example: [`src/genome_profiles/yeast.json`](src/genome_profiles/yeast.json).
+Example: [`src/genome_profiles/fission_yeasts.json`](src/genome_profiles/fission_yeasts.json).
 
 ### `genome_data/`
-Each organism lives under `genome_data/<organism>/` with three folders:
+The current checked-in dataset is a combined fission yeast profile under
+`genome_data/fission_yeasts/` with three folders:
 
 - `full/` — original assembly FASTA and GFF (used only to regenerate splits)
 - `train/` — `*_train.fna` and `*_train.gff` used for model fitting
 - `test/` — `*_test.fna` and `*_test.gff` used for holdout validation
 
-The webapp predictor and validation runner train exclusively on the `train/`
-files. Yeast is checked in; other organisms stay local (see `.gitignore`).
+The combined profile uses four Schizosaccharomyces assemblies:
+
+- `S. pombe` 972h- (`GCF_000002945.1`)
+- `S. japonicus` yFS275 (`GCA_000149845.2`)
+- `S. octosporus` yFS286 (`GCA_000150505.2`)
+- `S. cryophilus` OY26 (`GCA_000004155.2`)
+
+The current split has 66 training chromosomes and 4 held-out evaluation
+chromosomes, one held-out chromosome/scaffold per species. The webapp predictor
+and validation runner train the HMM parameters exclusively on the `train/`
+files.
 
 Regenerate train/test files after changing source data or holdout chromosomes:
 
@@ -132,9 +155,7 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/genome_profiles/Genome_Profile.cpp \
   -o /tmp/split_genome_data
 
-/tmp/split_genome_data src/genome_profiles/yeast.json
-/tmp/split_genome_data src/genome_profiles/aspergillus.json
-# ... repeat for candida, cryptococcus, neurospora, s_pombe, c_elegans
+/tmp/split_genome_data src/genome_profiles/fission_yeasts.json
 ```
 
 ## Genome Profile Schema
@@ -143,18 +164,24 @@ Each profile in `src/genome_profiles/` follows this shape:
 
 ```json
 {
-  "name": "yeast",
+  "name": "fission_yeasts",
   "description": "...",
 
   "dataset": {
-    "source_fasta": "genome_data/yeast/full/GCF_000146045.2_R64_genomic.fna",
-    "source_gff":   "genome_data/yeast/full/genomic.gff",
-    "train_fasta":  "genome_data/yeast/train/yeast_train.fna",
-    "train_gff":    "genome_data/yeast/train/yeast_train.gff",
-    "test_fasta":   "genome_data/yeast/test/yeast_test.fna",
-    "test_gff":     "genome_data/yeast/test/yeast_test.gff",
-    "test_chromosomes":     ["NC_001148.4"],
-    "excluded_chromosomes": ["NC_001224.1"]
+    "source_fasta": "genome_data/fission_yeasts/full/fission_yeasts_genomic.fna",
+    "source_gff":   "genome_data/fission_yeasts/full/fission_yeasts_genomic.gff",
+    "train_fasta":  "genome_data/fission_yeasts/train/fission_yeasts_train.fna",
+    "train_gff":    "genome_data/fission_yeasts/train/fission_yeasts_train.gff",
+    "test_fasta":   "genome_data/fission_yeasts/test/fission_yeasts_test.fna",
+    "test_gff":     "genome_data/fission_yeasts/test/fission_yeasts_test.gff",
+    "test_chromosomes":     ["NC_003424.3", "KE651166.1", "KE503206.1", "KE546988.1"],
+    "excluded_chromosomes": ["NC_001326.1"]
+  },
+
+  "splice_cnn": {
+    "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+    "train_scores": "genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv",
+    "test_scores": "genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv"
   },
 
   "filters": {
@@ -177,7 +204,7 @@ Each profile in `src/genome_profiles/` follows this shape:
 
   "smoothing": {
     "transition_alpha": 0.02,
-    "emission_alpha":   0.5
+    "emission_alpha":   0.1
   }
 }
 ```
@@ -195,36 +222,55 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/main.cpp \
   src/decoding/Viterbi.cpp \
   src/decoding/Forward_Backward.cpp \
-  src/model/Transition_Model.cpp \
+  src/model/transition/Transition_Model.cpp \
   src/genome_profiles/Genome_Profile.cpp \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
-  src/model/Emission_Model.cpp \
+  src/model/emission/Emission_Model.cpp \
+  src/model/cnn/Splice_CNN_Scores.cpp \
   -o /tmp/gene_hmm_tests
 
 /tmp/gene_hmm_tests
 ```
 
-Build and run the default yeast holdout validation:
+Build and run the default fission yeast holdout validation:
 
 ```sh
 clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   validation/full_genome_validation.cpp \
   src/decoding/Viterbi.cpp \
-  src/model/Transition_Model.cpp \
+  src/model/transition/Transition_Model.cpp \
   src/genome_profiles/Genome_Profile.cpp \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
-  src/model/Emission_Model.cpp \
+  src/model/emission/Emission_Model.cpp \
+  src/model/cnn/Splice_CNN_Scores.cpp \
   -o /tmp/full_genome_validation
 
 /tmp/full_genome_validation
 ```
 
-Run validation on another organism (after splitting its data):
+The validation runner expects CNN splice-score files at the paths configured in
+`src/genome_profiles/fission_yeasts.json`. Generate or refresh them with:
 
 ```sh
-/tmp/full_genome_validation --profile src/genome_profiles/aspergillus.json
+python3 src/model/cnn/train_splice_cnn_scores.py \
+  --train-fasta genome_data/fission_yeasts/train/fission_yeasts_train.fna \
+  --train-gff genome_data/fission_yeasts/train/fission_yeasts_train.gff \
+  --test-fasta genome_data/fission_yeasts/test/fission_yeasts_test.fna \
+  --model-out src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt \
+  --train-scores-out genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv \
+  --test-scores-out genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv
+```
+
+If the `.pt` checkpoint already exists, the script loads it and only regenerates
+the score TSVs. The checkpoint and generated score files are local artifacts and
+are ignored by git.
+
+Run validation with an explicit profile:
+
+```sh
+/tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json
 ```
 
 ## Local Frontend
@@ -233,6 +279,24 @@ The `frontend/` directory contains a local React UI plus a local Node API. The
 API accepts FASTA/FNA uploads, runs the C++ HMM predictor on the same machine,
 and keeps prediction runs in memory for the current browser session only. There
 is no cloud storage or external service integration.
+
+Frontend features:
+
+- **Multi-file FASTA/FNA upload** with per-file selection, scaffold counts, base
+  counts, and local run timing/status.
+- **Saved local runs** in the sidebar for switching between completed analyses
+  during the current browser session.
+- **Prediction summary cards** for total bases, scaffolds, predicted genes,
+  coding segments, and introns.
+- **Genome track view** with scaffold selection, coordinate range controls, and
+  draggable region selection for zooming into predicted genes.
+- **Per-base confidence display** from the Forward-Backward posterior output,
+  with limits for large regions.
+- **Searchable and paginated gene table** with scaffold/range filters and row
+  selection that updates the genome view.
+- **Selected prediction details** including exon/intron counts and copyable
+  predicted nucleotide sequence.
+- **Export endpoints and buttons** for GFF3, CSV, BED, and FASTA output.
 
 ```sh
 cd frontend
@@ -244,9 +308,36 @@ Open the Vite URL printed by the terminal, usually
 `http://localhost:5173/`. The local API listens on `http://localhost:5174/`.
 
 The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
-`src/tools/predict_fna.cpp` (`--fna PATH --profile PATH`).
+`src/tools/predict_fna.cpp`. The predictor requires `--splice-cnn-scores` when
+decoding an input FASTA because donor/acceptor emissions no longer fall back to
+PSSM scores.
 
-## Recent Model Fixes (1.3)
+## Model Changes (2.1): HMM + CNN Emissions
+
+- **Donor and acceptor emissions now come from CNN score files.**
+  `DONOR_1/2/3` and `ACCEPTOR_1/2/3` still require canonical `GT`/`AG`, but
+  their emission log-odds are loaded from CNN-produced per-position scores.
+- **There is no PSSM fallback for splice emissions.** If CNN scores are missing,
+  `Emission_Model` prints an error and throws instead of silently decoding with
+  donor/acceptor PSSMs.
+- **The PyTorch CNN lives under `src/model/cnn/`.**
+  `splice_cnn_network.py` defines the network, while
+  `train_splice_cnn_scores.py` trains or reloads the local checkpoint and writes
+  score TSVs for the HMM.
+- **The trained fission yeast CNN checkpoint is local.**
+  The profile points to
+  `src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt`; this file is
+  intentionally gitignored so it can be cached locally without committing model
+  weights.
+- **The model folder is split by responsibility.** HMM transition logic lives in
+  `src/model/transition/`, HMM emissions in `src/model/emission/`, and CNN
+  training/score loading in `src/model/cnn/`.
+- **The active dataset is the combined fission yeast family.** The current
+  profile pools `S. pombe`, `S. japonicus`, `S. octosporus`, and
+  `S. cryophilus`, with 66 training chromosomes and 4 held-out evaluation
+  chromosomes.
+
+## Recent Model Updates/Features (1.3)
 
 - **Forward-Backward posterior confidence was added.**
   `src/decoding/Forward_Backward.*` computes posterior log probabilities for
@@ -260,7 +351,7 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
   forced-path confidence near `1.0`, and a simple ambiguous one-base posterior
   case.
 
-## Recent Model Fixes (1.2)
+## Recent Model Updates/Features (1.2)
 
 - **Annotation filters now affect the training labels.** `GFF_Parser` groups CDS
   fragments by parent transcript, applies the active profile's CDS-length,
@@ -275,10 +366,9 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
   `INTERGENIC_REGION`, `CDS_REGION`, `INTRON_REGION`, and `IGNORED_REGION`,
   and parser tests include the ignored count in their region sanity check.
 - **Validation output was refreshed.** The result files now use the compact
-  metric tables, report usable interval-aware scores, and include new
-  `c_elegans` and `yeast` validation runs.
+  metric tables and report usable interval-aware scores.
 
-## Recent Model Fixes (1.1)
+## Recent Model Updates/Features (1.1)
 
 - **Splice signals use log-odds now.** Donor and acceptor windows are scored as
   `log P(window | true site) - log P(window | matched background)`. Donor

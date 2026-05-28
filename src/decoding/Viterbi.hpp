@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../model/Transition_Model.hpp"
-#include "../model/Emission_Model.hpp"
+#include "../model/transition/Transition_Model.hpp"
+#include "../model/emission/Emission_Model.hpp"
 #include "../topology/Topology.hpp"
 #include <vector>
 #include <array>

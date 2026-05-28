@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../model/Transition_Model.hpp"
+#include "../model/transition/Transition_Model.hpp"
 #include "../genome_profiles/Genome_Profile.hpp"
 #include "Test_Utils.hpp"
 #include <cmath>
