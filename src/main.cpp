@@ -5,15 +5,22 @@
 #include "unit_tests/Emission_Model_Test.hpp"
 #include "unit_tests/Viterbi_Test.hpp"
 #include "unit_tests/Forward_Backward_Test.hpp"
+#include <string>
 
 int main() {
     gene_hmm::profile = gene_hmm::Genome_Profile::load("src/genome_profiles/fission_yeasts.json");
 
     gene_hmm::run_FNA_Parser_tests();
 
+    std::string train_fasta_path = gene_hmm::profile.train_fasta_path;
+    std::string train_gff_path = gene_hmm::profile.train_gff_path;
+    if (!gene_hmm::profile.species.empty()) {
+        train_fasta_path = gene_hmm::profile.species.front().train_fasta_path;
+        train_gff_path = gene_hmm::profile.species.front().train_gff_path;
+    }
     gene_hmm::run_GFF_Parser_tests(
-        gene_hmm::profile.train_fasta_path,
-        gene_hmm::profile.train_gff_path
+        train_fasta_path,
+        train_gff_path
     );
 
     gene_hmm::run_Transition_Model_tests();

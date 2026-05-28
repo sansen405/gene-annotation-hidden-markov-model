@@ -17,8 +17,7 @@ __pycache__/
 *.pyc
 
 # Local CNN training artifacts.
-genome_data/fission_yeasts/train/chromosomes/
-genome_data/fission_yeasts/test/chromosomes/
+genome_data/fission_yeasts/**/*.tsv
 src/model/cnn/trained_models/*
 !src/model/cnn/trained_models/.gitkeep
 src/model/CNN/trained_models/*

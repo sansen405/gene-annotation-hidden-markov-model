@@ -129,14 +129,14 @@ void write_gff_split(
     }
 }
 
-set<string> train_chromosomes_from_profile(const Genome_Profile& profile) {
-    ifstream fasta(profile.source_fasta_path);
+set<string> train_chromosomes_from_dataset(const Species_Dataset& dataset) {
+    ifstream fasta(dataset.source_fasta_path);
     if (!fasta.is_open()) {
-        throw runtime_error("Cannot open source FASTA: " + profile.source_fasta_path);
+        throw runtime_error("Cannot open source FASTA: " + dataset.source_fasta_path);
     }
 
-    set<string> test_set(profile.test_chromosomes.begin(), profile.test_chromosomes.end());
-    set<string> excluded_set(profile.excluded_chromosomes.begin(), profile.excluded_chromosomes.end());
+    set<string> test_set(dataset.test_chromosomes.begin(), dataset.test_chromosomes.end());
+    set<string> excluded_set(dataset.excluded_chromosomes.begin(), dataset.excluded_chromosomes.end());
     set<string> train_set;
 
     string line;
@@ -157,8 +157,8 @@ set<string> train_chromosomes_from_profile(const Genome_Profile& profile) {
     return train_set;
 }
 
-set<string> test_chromosomes_from_profile(const Genome_Profile& profile) {
-    return set<string>(profile.test_chromosomes.begin(), profile.test_chromosomes.end());
+set<string> test_chromosomes_from_dataset(const Species_Dataset& dataset) {
+    return set<string>(dataset.test_chromosomes.begin(), dataset.test_chromosomes.end());
 }
 
 } // namespace
@@ -168,32 +168,39 @@ int main(int argc, char** argv) {
         string profile_path = argc > 1 ? argv[1] : "src/genome_profiles/fission_yeasts.json";
         Genome_Profile profile = Genome_Profile::load(profile_path);
 
-        if (profile.source_fasta_path.empty() || profile.source_gff_path.empty()) {
-            throw runtime_error("Profile must define dataset.source_fasta and dataset.source_gff.");
+        if (profile.species.empty()) {
+            throw runtime_error("Profile must define dataset.species.");
         }
-        if (profile.test_chromosomes.empty()) {
-            throw runtime_error("Profile must define dataset.test_chromosomes.");
-        }
-
-        set<string> train_chromosomes = train_chromosomes_from_profile(profile);
-        set<string> test_chromosomes = test_chromosomes_from_profile(profile);
 
         cout << "Splitting " << profile.name << " genome data\n";
-        cout << "  source FASTA: " << profile.source_fasta_path << "\n";
-        cout << "  source GFF:   " << profile.source_gff_path << "\n";
-        cout << "  train chromosomes: " << train_chromosomes.size() << "\n";
-        cout << "  test chromosomes:  " << test_chromosomes.size() << "\n";
-        cout << "  excluded:          " << profile.excluded_chromosomes.size() << "\n";
+        for (const auto& dataset : profile.species) {
+            if (dataset.source_fasta_path.empty() || dataset.source_gff_path.empty()) {
+                throw runtime_error("Species dataset must define source_fasta and source_gff: " + dataset.name);
+            }
+            if (dataset.test_chromosomes.empty()) {
+                throw runtime_error("Species dataset must define test_chromosomes: " + dataset.name);
+            }
 
-        write_fasta_split(profile.source_fasta_path, profile.train_fasta_path, train_chromosomes);
-        write_gff_split(profile.source_gff_path, profile.train_gff_path, train_chromosomes);
-        write_fasta_split(profile.source_fasta_path, profile.test_fasta_path, test_chromosomes);
-        write_gff_split(profile.source_gff_path, profile.test_gff_path, test_chromosomes);
+            set<string> train_chromosomes = train_chromosomes_from_dataset(dataset);
+            set<string> test_chromosomes = test_chromosomes_from_dataset(dataset);
 
-        cout << "Wrote train FASTA: " << profile.train_fasta_path << "\n";
-        cout << "Wrote train GFF:   " << profile.train_gff_path << "\n";
-        cout << "Wrote test FASTA:  " << profile.test_fasta_path << "\n";
-        cout << "Wrote test GFF:    " << profile.test_gff_path << "\n";
+            cout << "  " << dataset.name << "\n";
+            cout << "    source FASTA: " << dataset.source_fasta_path << "\n";
+            cout << "    source GFF:   " << dataset.source_gff_path << "\n";
+            cout << "    train chromosomes: " << train_chromosomes.size() << "\n";
+            cout << "    test chromosomes:  " << test_chromosomes.size() << "\n";
+            cout << "    excluded:          " << dataset.excluded_chromosomes.size() << "\n";
+
+            write_fasta_split(dataset.source_fasta_path, dataset.train_fasta_path, train_chromosomes);
+            write_gff_split(dataset.source_gff_path, dataset.train_gff_path, train_chromosomes);
+            write_fasta_split(dataset.source_fasta_path, dataset.test_fasta_path, test_chromosomes);
+            write_gff_split(dataset.source_gff_path, dataset.test_gff_path, test_chromosomes);
+
+            cout << "    wrote train FASTA: " << dataset.train_fasta_path << "\n";
+            cout << "    wrote train GFF:   " << dataset.train_gff_path << "\n";
+            cout << "    wrote test FASTA:  " << dataset.test_fasta_path << "\n";
+            cout << "    wrote test GFF:    " << dataset.test_gff_path << "\n";
+        }
         return 0;
     } catch (const exception& error) {
         cerr << error.what() << "\n";

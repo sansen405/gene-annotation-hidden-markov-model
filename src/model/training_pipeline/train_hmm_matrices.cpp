@@ -22,6 +22,13 @@ using namespace gene_hmm;
 using namespace std;
 namespace fs = std::filesystem;
 
+struct Training_Data {
+    vector<Nucleotide> nucleotides;
+    vector<State> states;
+    vector<int> regions;
+    vector<Chromosome_Range> chromosomes;
+};
+
 bool is_usable_region(int region) {
     return region != GFF_Parser::IGNORED_REGION;
 }
@@ -51,6 +58,39 @@ vector<Chromosome_Range> split_usable_ranges(
     }
 
     return usable_ranges;
+}
+
+void append_training_dataset(Training_Data& combined, const Species_Dataset& dataset) {
+    size_t offset = combined.nucleotides.size();
+
+    vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(dataset.train_fasta_path);
+    vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(dataset.train_fasta_path);
+    string train_gff_path = dataset.train_gff_path;
+    string train_fasta_path = dataset.train_fasta_path;
+    vector<int> regions = GFF_Parser::parse_regions(train_gff_path, train_fasta_path);
+    vector<State> states = GFF_Parser::parse_states(regions);
+
+    if (states.size() != nucleotides.size()) {
+        throw runtime_error("Training state length does not match nucleotide length for " + dataset.name + ".");
+    }
+
+    combined.nucleotides.insert(combined.nucleotides.end(), nucleotides.begin(), nucleotides.end());
+    combined.states.insert(combined.states.end(), states.begin(), states.end());
+    combined.regions.insert(combined.regions.end(), regions.begin(), regions.end());
+    for (auto range : chromosomes) {
+        range.name = dataset.name + ":" + range.name;
+        range.start += offset;
+        range.end += offset;
+        combined.chromosomes.push_back(range);
+    }
+}
+
+Training_Data load_training_data(const Genome_Profile& profile) {
+    Training_Data combined;
+    for (const auto& dataset : profile.species) {
+        append_training_dataset(combined, dataset);
+    }
+    return combined;
 }
 
 Emission_Model train_emissions(
@@ -213,26 +253,18 @@ int main(int argc, char** argv) {
         string out_dir = value_after_arg(argc, argv, "--out-dir", default_out_dir);
         fs::create_directories(out_dir);
 
-        vector<Nucleotide> training_nucleotides =
-            FNA_Parser::parse_sequence(gene_hmm::profile.train_fasta_path);
-        vector<Chromosome_Range> training_chromosomes =
-            FNA_Parser::get_chromosome_ranges(gene_hmm::profile.train_fasta_path);
+        Training_Data training = load_training_data(gene_hmm::profile);
+        vector<Chromosome_Range> train_ranges = split_usable_ranges(training.chromosomes, training.regions);
 
-        string train_gff_path = gene_hmm::profile.train_gff_path;
-        string train_fasta_path = gene_hmm::profile.train_fasta_path;
-        vector<int> training_regions = GFF_Parser::parse_regions(train_gff_path, train_fasta_path);
-        vector<State> training_states = GFF_Parser::parse_states(training_regions);
-        vector<Chromosome_Range> train_ranges = split_usable_ranges(training_chromosomes, training_regions);
-
-        if (training_states.size() != training_nucleotides.size()) {
+        if (training.states.size() != training.nucleotides.size()) {
             throw runtime_error("Training state length does not match nucleotide length.");
         }
         if (train_ranges.empty()) {
             throw runtime_error("No usable training intervals after applying annotation filters.");
         }
 
-        auto transition_matrix = Transition_Model::compute_log_probs(training_states, train_ranges);
-        Emission_Model emission_model = train_emissions(training_states, training_nucleotides, train_ranges);
+        auto transition_matrix = Transition_Model::compute_log_probs(training.states, train_ranges);
+        Emission_Model emission_model = train_emissions(training.states, training.nucleotides, train_ranges);
         json splice_cnn = read_splice_cnn_config(profile_path);
 
         json transition_artifact = {
@@ -275,9 +307,8 @@ int main(int argc, char** argv) {
 
         json metadata = {
             {"profile", gene_hmm::profile.name},
-            {"train_fasta", gene_hmm::profile.train_fasta_path},
-            {"train_gff", gene_hmm::profile.train_gff_path},
-            {"training_chromosomes", training_chromosomes.size()},
+            {"species_count", gene_hmm::profile.species.size()},
+            {"training_chromosomes", training.chromosomes.size()},
             {"usable_training_intervals", train_ranges.size()},
             {"transition_matrix", "transition_matrix.json"},
             {"emission_matrix", "emission_matrix.json"},

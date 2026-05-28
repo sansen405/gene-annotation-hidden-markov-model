@@ -18,8 +18,22 @@ namespace gene_hmm {
         size_t window_right= 0; //PSSM
     };
 
+    struct Species_Dataset {
+        string name;
+        string source_fasta_path;
+        string source_gff_path;
+        string train_fasta_path;
+        string train_gff_path;
+        string test_fasta_path;
+        string test_gff_path;
+        vector<string> test_chromosomes;
+        vector<string> excluded_chromosomes;
+    };
+
     struct Genome_Profile {
         string name;
+
+        vector<Species_Dataset> species;
 
         string source_fasta_path;
         string source_gff_path;

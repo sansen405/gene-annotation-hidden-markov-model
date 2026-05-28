@@ -23,6 +23,13 @@ using namespace std;
 
 Log_Prob gene_start_penalty = 1.0;
 
+struct Training_Data {
+    vector<Nucleotide> nucleotides;
+    vector<State> states;
+    vector<int> regions;
+    vector<Chromosome_Range> chromosomes;
+};
+
 bool is_coding(State state) {
     return state == State::START_CODON_1 ||
            state == State::START_CODON_2 ||
@@ -134,6 +141,39 @@ vector<Chromosome_Range> split_usable_ranges(
     }
 
     return usable_ranges;
+}
+
+void append_training_dataset(Training_Data& combined, const Species_Dataset& dataset) {
+    size_t offset = combined.nucleotides.size();
+
+    vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(dataset.train_fasta_path);
+    vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(dataset.train_fasta_path);
+    string gff_path = dataset.train_gff_path;
+    string fasta_path = dataset.train_fasta_path;
+    vector<int> regions = GFF_Parser::parse_regions(gff_path, fasta_path);
+    vector<State> states = GFF_Parser::parse_states(regions);
+
+    if (states.size() != nucleotides.size()) {
+        throw runtime_error("Training state length does not match nucleotide length for " + dataset.name + ".");
+    }
+
+    combined.nucleotides.insert(combined.nucleotides.end(), nucleotides.begin(), nucleotides.end());
+    combined.states.insert(combined.states.end(), states.begin(), states.end());
+    combined.regions.insert(combined.regions.end(), regions.begin(), regions.end());
+    for (auto range : chromosomes) {
+        range.name = dataset.name + ":" + range.name;
+        range.start += offset;
+        range.end += offset;
+        combined.chromosomes.push_back(range);
+    }
+}
+
+Training_Data load_training_data(const Genome_Profile& profile) {
+    Training_Data combined;
+    for (const auto& dataset : profile.species) {
+        append_training_dataset(combined, dataset);
+    }
+    return combined;
 }
 
 Emission_Model train_emissions(
@@ -354,19 +394,11 @@ int main(int argc, char** argv) {
 
         gene_hmm::profile = Genome_Profile::load(profile_path);
 
-        vector<Nucleotide> training_nucleotides =
-            FNA_Parser::parse_sequence(gene_hmm::profile.train_fasta_path);
-        vector<Chromosome_Range> training_chromosomes =
-            FNA_Parser::get_chromosome_ranges(gene_hmm::profile.train_fasta_path);
+        Training_Data training = load_training_data(gene_hmm::profile);
+        vector<Chromosome_Range> train_ranges = split_usable_ranges(training.chromosomes, training.regions);
 
-        string gff_path = gene_hmm::profile.train_gff_path;
-        string training_fasta_path = gene_hmm::profile.train_fasta_path;
-        vector<int> training_regions = GFF_Parser::parse_regions(gff_path, training_fasta_path);
-        vector<State> training_states = GFF_Parser::parse_states(training_regions);
-        vector<Chromosome_Range> train_ranges = split_usable_ranges(training_chromosomes, training_regions);
-
-        auto transition_log_probs = Transition_Model::compute_log_probs(training_states, train_ranges);
-        Emission_Model emission_model = train_emissions(training_states, training_nucleotides, train_ranges);
+        auto transition_log_probs = Transition_Model::compute_log_probs(training.states, train_ranges);
+        Emission_Model emission_model = train_emissions(training.states, training.nucleotides, train_ranges);
 
         vector<Nucleotide> input_nucleotides = FNA_Parser::parse_sequence(input_fna);
         vector<Chromosome_Range> input_ranges = FNA_Parser::get_chromosome_ranges(input_fna);

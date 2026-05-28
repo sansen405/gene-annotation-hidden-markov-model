@@ -3,27 +3,68 @@
     "description": "Combined Schizosaccharomyces profile: S. pombe, S. japonicus, S. octosporus, and S. cryophilus",
 
     "dataset": {
-        "source_fasta": "genome_data/fission_yeasts/full/fission_yeasts_genomic.fna",
-        "source_gff":   "genome_data/fission_yeasts/full/fission_yeasts_genomic.gff",
-        "train_fasta":  "genome_data/fission_yeasts/train/fission_yeasts_train.fna",
-        "train_gff":    "genome_data/fission_yeasts/train/fission_yeasts_train.gff",
-        "test_fasta":   "genome_data/fission_yeasts/test/fission_yeasts_test.fna",
-        "test_gff":     "genome_data/fission_yeasts/test/fission_yeasts_test.gff",
-        "test_chromosomes": [
-            "NC_003424.3",
-            "KE651166.1",
-            "KE503206.1",
-            "KE546988.1"
-        ],
-        "excluded_chromosomes": [
-            "NC_001326.1"
+        "species": [
+            {
+                "name": "s_pombe",
+                "source_fasta": "genome_data/fission_yeasts/s_pombe/full/s_pombe_full.fna",
+                "source_gff":   "genome_data/fission_yeasts/s_pombe/full/s_pombe_full.gff",
+                "train_fasta":  "genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna",
+                "train_gff":    "genome_data/fission_yeasts/s_pombe/train/s_pombe_train.gff",
+                "test_fasta":   "genome_data/fission_yeasts/s_pombe/test/s_pombe_test.fna",
+                "test_gff":     "genome_data/fission_yeasts/s_pombe/test/s_pombe_test.gff",
+                "test_chromosomes": ["NC_003424.3"],
+                "excluded_chromosomes": ["NC_001326.1"]
+            },
+            {
+                "name": "s_japonicus",
+                "source_fasta": "genome_data/fission_yeasts/s_japonicus/full/s_japonicus_full.fna",
+                "source_gff":   "genome_data/fission_yeasts/s_japonicus/full/s_japonicus_full.gff",
+                "train_fasta":  "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna",
+                "train_gff":    "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.gff",
+                "test_fasta":   "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_test.fna",
+                "test_gff":     "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_test.gff",
+                "test_chromosomes": ["KE651166.1"],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "s_octosporus",
+                "source_fasta": "genome_data/fission_yeasts/s_octosporus/full/s_octosporus_full.fna",
+                "source_gff":   "genome_data/fission_yeasts/s_octosporus/full/s_octosporus_full.gff",
+                "train_fasta":  "genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.fna",
+                "train_gff":    "genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.gff",
+                "test_fasta":   "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_test.fna",
+                "test_gff":     "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_test.gff",
+                "test_chromosomes": ["KE503206.1"],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "s_cryophilus",
+                "source_fasta": "genome_data/fission_yeasts/s_cryophilus/full/s_cryophilus_full.fna",
+                "source_gff":   "genome_data/fission_yeasts/s_cryophilus/full/s_cryophilus_full.gff",
+                "train_fasta":  "genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.fna",
+                "train_gff":    "genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.gff",
+                "test_fasta":   "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_test.fna",
+                "test_gff":     "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_test.gff",
+                "test_chromosomes": ["KE546988.1"],
+                "excluded_chromosomes": []
+            }
         ]
     },
 
     "splice_cnn": {
         "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
-        "train_scores": "genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv",
-        "test_scores": "genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv"
+        "train_scores": [
+            "genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_octosporus/train/s_octosporus_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_splice_cnn_scores.tsv"
+        ],
+        "test_scores": [
+            "genome_data/fission_yeasts/s_pombe/test/s_pombe_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_splice_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_splice_cnn_scores.tsv"
+        ]
     },
 
     "filters": {

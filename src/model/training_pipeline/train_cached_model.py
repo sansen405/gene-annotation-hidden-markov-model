@@ -51,23 +51,36 @@ def refresh_cnn_scores(profile_path: Path, python: str) -> None:
 
     dataset = profile["dataset"]
     splice_cnn = profile["splice_cnn"]
+    species = dataset.get("species")
+    if species is None:
+        species = [dataset]
+
+    train_fastas = [item["train_fasta"] for item in species]
+    train_gffs = [item["train_gff"] for item in species]
+    test_fastas = [item["test_fasta"] for item in species]
+    train_scores = splice_cnn["train_scores"]
+    test_scores = splice_cnn["test_scores"]
+    if isinstance(train_scores, str):
+        train_scores = [train_scores]
+    if isinstance(test_scores, str):
+        test_scores = [test_scores]
 
     run(
         [
             python,
             "src/model/cnn/train_splice_cnn_scores.py",
             "--train-fasta",
-            dataset["train_fasta"],
+            *train_fastas,
             "--train-gff",
-            dataset["train_gff"],
+            *train_gffs,
             "--test-fasta",
-            dataset["test_fasta"],
+            *test_fastas,
             "--model-out",
             splice_cnn["model"],
             "--train-scores-out",
-            splice_cnn["train_scores"],
+            *train_scores,
             "--test-scores-out",
-            splice_cnn["test_scores"],
+            *test_scores,
         ],
         "training/loading CNN and refreshing splice score files",
     )

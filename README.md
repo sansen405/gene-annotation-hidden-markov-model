@@ -140,14 +140,22 @@ smoothing hyperparameters.
 Example: [`src/genome_profiles/fission_yeasts.json`](src/genome_profiles/fission_yeasts.json).
 
 ### `genome_data/`
-The current checked-in dataset is a combined fission yeast profile under
-`genome_data/fission_yeasts/` with three folders:
+The checked-in fission yeast profile keeps each species in its own folder under
+`genome_data/fission_yeasts/`:
 
-- `full/` — original assembly FASTA and GFF (used only to regenerate splits)
-- `train/` — `*_train.fna` and `*_train.gff` used for model fitting
-- `test/` — `*_test.fna` and `*_test.gff` used for holdout validation
+```text
+genome_data/fission_yeasts/
+├── s_pombe/
+│   ├── full/
+│   ├── train/
+│   └── test/
+├── s_japonicus/
+├── s_octosporus/
+└── s_cryophilus/
+```
 
-The combined profile uses four Schizosaccharomyces assemblies:
+The profile trains one shared model across four Schizosaccharomyces assemblies,
+but the FASTA/GFF files are not merged on disk:
 
 - `S. pombe` 972h- (`GCF_000002945.1`)
 - `S. japonicus` yFS275 (`GCA_000149845.2`)
@@ -155,9 +163,9 @@ The combined profile uses four Schizosaccharomyces assemblies:
 - `S. cryophilus` OY26 (`GCA_000004155.2`)
 
 The current split has 66 training chromosomes and 4 held-out evaluation
-chromosomes, one held-out chromosome/scaffold per species. The webapp predictor
-and validation runner train the HMM parameters exclusively on the `train/`
-files.
+chromosomes, one held-out chromosome/scaffold per species. The training pipeline
+and validation runner load all four species' `train/` files and combine them in
+memory for parameter fitting.
 
 Regenerate train/test files after changing source data or holdout chromosomes:
 
@@ -180,20 +188,29 @@ Each profile in `src/genome_profiles/` follows this shape:
   "description": "...",
 
   "dataset": {
-    "source_fasta": "genome_data/fission_yeasts/full/fission_yeasts_genomic.fna",
-    "source_gff":   "genome_data/fission_yeasts/full/fission_yeasts_genomic.gff",
-    "train_fasta":  "genome_data/fission_yeasts/train/fission_yeasts_train.fna",
-    "train_gff":    "genome_data/fission_yeasts/train/fission_yeasts_train.gff",
-    "test_fasta":   "genome_data/fission_yeasts/test/fission_yeasts_test.fna",
-    "test_gff":     "genome_data/fission_yeasts/test/fission_yeasts_test.gff",
-    "test_chromosomes":     ["NC_003424.3", "KE651166.1", "KE503206.1", "KE546988.1"],
-    "excluded_chromosomes": ["NC_001326.1"]
+    "species": [
+      {
+        "name": "s_pombe",
+        "source_fasta": "genome_data/fission_yeasts/s_pombe/full/s_pombe_full.fna",
+        "source_gff":   "genome_data/fission_yeasts/s_pombe/full/s_pombe_full.gff",
+        "train_fasta":  "genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna",
+        "train_gff":    "genome_data/fission_yeasts/s_pombe/train/s_pombe_train.gff",
+        "test_fasta":   "genome_data/fission_yeasts/s_pombe/test/s_pombe_test.fna",
+        "test_gff":     "genome_data/fission_yeasts/s_pombe/test/s_pombe_test.gff",
+        "test_chromosomes": ["NC_003424.3"],
+        "excluded_chromosomes": ["NC_001326.1"]
+      }
+    ]
   },
 
   "splice_cnn": {
     "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
-    "train_scores": "genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv",
-    "test_scores": "genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv"
+    "train_scores": [
+      "genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv"
+    ],
+    "test_scores": [
+      "genome_data/fission_yeasts/s_pombe/test/s_pombe_splice_cnn_scores.tsv"
+    ]
   },
 
   "filters": {
@@ -267,11 +284,31 @@ The validation runner expects CNN splice-score files at the paths configured in
 
 ```sh
 python3 src/model/cnn/train_splice_cnn_scores.py \
-  --train-fasta genome_data/fission_yeasts/train/fission_yeasts_train.fna \
-  --train-gff genome_data/fission_yeasts/train/fission_yeasts_train.gff \
-  --test-fasta genome_data/fission_yeasts/test/fission_yeasts_test.fna \
-  --train-scores-out genome_data/fission_yeasts/train/fission_yeasts_splice_cnn_scores.tsv \
-  --test-scores-out genome_data/fission_yeasts/test/fission_yeasts_splice_cnn_scores.tsv
+  --train-fasta \
+    genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna \
+    genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna \
+    genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.fna \
+    genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.fna \
+  --train-gff \
+    genome_data/fission_yeasts/s_pombe/train/s_pombe_train.gff \
+    genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.gff \
+    genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.gff \
+    genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.gff \
+  --test-fasta \
+    genome_data/fission_yeasts/s_pombe/test/s_pombe_test.fna \
+    genome_data/fission_yeasts/s_japonicus/test/s_japonicus_test.fna \
+    genome_data/fission_yeasts/s_octosporus/test/s_octosporus_test.fna \
+    genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_test.fna \
+  --train-scores-out \
+    genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_japonicus/train/s_japonicus_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_octosporus/train/s_octosporus_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_splice_cnn_scores.tsv \
+  --test-scores-out \
+    genome_data/fission_yeasts/s_pombe/test/s_pombe_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_japonicus/test/s_japonicus_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_octosporus/test/s_octosporus_splice_cnn_scores.tsv \
+    genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_splice_cnn_scores.tsv
 ```
 
 If the `.pt` checkpoint already exists, the script loads it and only regenerates
@@ -316,7 +353,7 @@ python3 - <<'PY'
 from pathlib import Path
 
 chrom = "NC_003424.3"
-source = Path("genome_data/fission_yeasts/test/fission_yeasts_test.fna")
+source = Path("genome_data/fission_yeasts/s_pombe/test/s_pombe_test.fna")
 out = Path(f"/tmp/{chrom}.fna")
 writing = False
 
@@ -331,10 +368,22 @@ print(out)
 PY
 
 python3 src/model/cnn/train_splice_cnn_scores.py \
-  --train-fasta genome_data/fission_yeasts/train/fission_yeasts_train.fna \
-  --train-gff genome_data/fission_yeasts/train/fission_yeasts_train.gff \
+  --train-fasta \
+    genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna \
+    genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna \
+    genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.fna \
+    genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.fna \
+  --train-gff \
+    genome_data/fission_yeasts/s_pombe/train/s_pombe_train.gff \
+    genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.gff \
+    genome_data/fission_yeasts/s_octosporus/train/s_octosporus_train.gff \
+    genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_train.gff \
   --test-fasta /tmp/NC_003424.3.fna \
-  --train-scores-out /tmp/fission_yeasts_train_splice_cnn_scores.tsv \
+  --train-scores-out \
+    /tmp/s_pombe_train_splice_cnn_scores.tsv \
+    /tmp/s_japonicus_train_splice_cnn_scores.tsv \
+    /tmp/s_octosporus_train_splice_cnn_scores.tsv \
+    /tmp/s_cryophilus_train_splice_cnn_scores.tsv \
   --test-scores-out /tmp/NC_003424.3_splice_cnn_scores.tsv
 ```
 

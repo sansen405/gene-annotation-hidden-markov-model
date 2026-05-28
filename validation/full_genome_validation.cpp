@@ -10,6 +10,7 @@
 #include <limits>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,13 @@ struct Interval {
     string chromosome;
     size_t start = 0; // 0-based, chromosome-local, inclusive
     size_t end = 0;   // 0-based, chromosome-local, exclusive
+};
+
+struct Sequence_Data {
+    vector<Nucleotide> nucleotides;
+    vector<State> states;
+    vector<int> regions;
+    vector<Chromosome_Range> chromosomes;
 };
 
 bool is_coding(State state) {
@@ -447,6 +455,52 @@ vector<Chromosome_Range> split_usable_ranges(
     return usable_ranges;
 }
 
+void append_dataset(
+    Sequence_Data& combined,
+    const string& name,
+    const string& fasta_path,
+    const string& gff_path)
+{
+    size_t offset = combined.nucleotides.size();
+
+    vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(fasta_path);
+    vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(fasta_path);
+    string mutable_gff_path = gff_path;
+    string mutable_fasta_path = fasta_path;
+    vector<int> regions = GFF_Parser::parse_regions(mutable_gff_path, mutable_fasta_path);
+    vector<State> states = GFF_Parser::parse_states(regions);
+
+    if (states.size() != nucleotides.size()) {
+        throw runtime_error("State length does not match nucleotide length for " + name + ".");
+    }
+
+    combined.nucleotides.insert(combined.nucleotides.end(), nucleotides.begin(), nucleotides.end());
+    combined.states.insert(combined.states.end(), states.begin(), states.end());
+    combined.regions.insert(combined.regions.end(), regions.begin(), regions.end());
+    for (auto range : chromosomes) {
+        range.name = name + ":" + range.name;
+        range.start += offset;
+        range.end += offset;
+        combined.chromosomes.push_back(range);
+    }
+}
+
+Sequence_Data load_training_data(const Genome_Profile& profile) {
+    Sequence_Data combined;
+    for (const auto& dataset : profile.species) {
+        append_dataset(combined, dataset.name, dataset.train_fasta_path, dataset.train_gff_path);
+    }
+    return combined;
+}
+
+Sequence_Data load_evaluation_data(const Genome_Profile& profile) {
+    Sequence_Data combined;
+    for (const auto& dataset : profile.species) {
+        append_dataset(combined, dataset.name, dataset.test_fasta_path, dataset.test_gff_path);
+    }
+    return combined;
+}
+
 void print_state_family_counts(const string& label, const vector<State>& states) {
     cout << label
          << " intergenic=" << count_state(states, State::INTERGENIC)
@@ -594,6 +648,20 @@ Genome_Profile parse_args(int argc, char** argv) {
         exit(1);
     }
 
+    if (profile.species.empty()) {
+        profile.species.push_back({
+            profile.name,
+            profile.source_fasta_path,
+            profile.source_gff_path,
+            profile.train_fasta_path,
+            profile.train_gff_path,
+            profile.test_fasta_path,
+            profile.test_gff_path,
+            profile.test_chromosomes,
+            profile.excluded_chromosomes
+        });
+    }
+
     return profile;
 }
 
@@ -603,40 +671,29 @@ int main(int argc, char** argv) {
     gene_hmm::profile = parse_args(argc, argv);
 
     cout << "Loading validation profile: " << gene_hmm::profile.name << "\n";
-    cout << "Train FASTA: " << gene_hmm::profile.train_fasta_path << "\n";
-    cout << "Train GFF:   " << gene_hmm::profile.train_gff_path << "\n";
-    cout << "Test FASTA:  " << gene_hmm::profile.test_fasta_path << "\n";
-    cout << "Test GFF:    " << gene_hmm::profile.test_gff_path << "\n";
+    cout << "Species datasets: " << gene_hmm::profile.species.size() << "\n";
+    for (const auto& dataset : gene_hmm::profile.species) {
+        cout << "  " << dataset.name << "\n"
+             << "    train FASTA: " << dataset.train_fasta_path << "\n"
+             << "    train GFF:   " << dataset.train_gff_path << "\n"
+             << "    test FASTA:  " << dataset.test_fasta_path << "\n"
+             << "    test GFF:    " << dataset.test_gff_path << "\n";
+    }
 
-    vector<Nucleotide> train_nucleotides =
-        FNA_Parser::parse_sequence(gene_hmm::profile.train_fasta_path);
-    vector<Chromosome_Range> train_chromosomes =
-        FNA_Parser::get_chromosome_ranges(gene_hmm::profile.train_fasta_path);
-    string train_gff_path = gene_hmm::profile.train_gff_path;
-    string train_fasta_path = gene_hmm::profile.train_fasta_path;
-    vector<int> train_regions = GFF_Parser::parse_regions(train_gff_path, train_fasta_path);
-    vector<State> train_gold_states = GFF_Parser::parse_states(train_regions);
+    Sequence_Data train_data = load_training_data(gene_hmm::profile);
+    Sequence_Data eval_data = load_evaluation_data(gene_hmm::profile);
 
-    vector<Nucleotide> eval_nucleotides =
-        FNA_Parser::parse_sequence(gene_hmm::profile.test_fasta_path);
-    vector<Chromosome_Range> eval_chromosomes =
-        FNA_Parser::get_chromosome_ranges(gene_hmm::profile.test_fasta_path);
-    string eval_gff_path = gene_hmm::profile.test_gff_path;
-    string eval_fasta_path = gene_hmm::profile.test_fasta_path;
-    vector<int> eval_regions = GFF_Parser::parse_regions(eval_gff_path, eval_fasta_path);
-    vector<State> eval_gold_states = GFF_Parser::parse_states(eval_regions);
-
-    if (train_gold_states.size() != train_nucleotides.size()) {
+    if (train_data.states.size() != train_data.nucleotides.size()) {
         cerr << "Train gold state length does not match nucleotide length.\n";
         return 1;
     }
-    if (eval_gold_states.size() != eval_nucleotides.size()) {
+    if (eval_data.states.size() != eval_data.nucleotides.size()) {
         cerr << "Test gold state length does not match nucleotide length.\n";
         return 1;
     }
 
-    vector<Chromosome_Range> train_ranges = split_usable_ranges(train_chromosomes, train_regions);
-    vector<Chromosome_Range> eval_ranges = split_usable_ranges(eval_chromosomes, eval_regions);
+    vector<Chromosome_Range> train_ranges = split_usable_ranges(train_data.chromosomes, train_data.regions);
+    vector<Chromosome_Range> eval_ranges = split_usable_ranges(eval_data.chromosomes, eval_data.regions);
     if (train_ranges.empty()) {
         cerr << "No usable training intervals after applying annotation filters.\n";
         return 1;
@@ -646,14 +703,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cout << "Training chromosomes: " << train_chromosomes.size() << "\n";
-    cout << "Evaluation chromosomes: " << eval_chromosomes.size() << "\n";
+    cout << "Training chromosomes: " << train_data.chromosomes.size() << "\n";
+    cout << "Evaluation chromosomes: " << eval_data.chromosomes.size() << "\n";
     cout << "Usable training intervals: " << train_ranges.size() << "\n";
     cout << "Usable evaluation intervals: " << eval_ranges.size() << "\n";
 
-    auto transition_log_probs = Transition_Model::compute_log_probs(train_gold_states, train_ranges);
-    Emission_Model emission_model = train_emissions(train_gold_states, train_nucleotides, train_ranges);
-    vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_gold_states, train_ranges);
+    auto transition_log_probs = Transition_Model::compute_log_probs(train_data.states, train_ranges);
+    Emission_Model emission_model = train_emissions(train_data.states, train_data.nucleotides, train_ranges);
+    vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_data.states, train_ranges);
     size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
 
     Binary_Metrics coding_total;
@@ -679,9 +736,9 @@ int main(int argc, char** argv) {
 
     for (const auto& range : eval_ranges) {
         vector<Nucleotide> chromosome_nucleotides =
-            slice_nucleotides(eval_nucleotides, range.start, range.end);
+            slice_nucleotides(eval_data.nucleotides, range.start, range.end);
         vector<State> chromosome_gold =
-            slice_states(eval_gold_states, range.start, range.end);
+            slice_states(eval_data.states, range.start, range.end);
         vector<State> chromosome_predicted =
             Viterbi::decode(
                 chromosome_nucleotides,

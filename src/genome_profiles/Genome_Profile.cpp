@@ -10,6 +10,24 @@ namespace gene_hmm {
 
     Genome_Profile profile;
 
+    namespace {
+        Species_Dataset parse_species_dataset(const json& dataset) {
+            Species_Dataset species;
+            species.name = dataset.value("name", "");
+            species.source_fasta_path = dataset["source_fasta"];
+            species.source_gff_path   = dataset["source_gff"];
+            species.train_fasta_path  = dataset["train_fasta"];
+            species.train_gff_path    = dataset["train_gff"];
+            species.test_fasta_path   = dataset["test_fasta"];
+            species.test_gff_path     = dataset["test_gff"];
+            for (const auto& c : dataset.value("test_chromosomes", json::array()))
+                species.test_chromosomes.push_back(c);
+            for (const auto& c : dataset.value("excluded_chromosomes", json::array()))
+                species.excluded_chromosomes.push_back(c);
+            return species;
+        }
+    }
+
     Genome_Profile Genome_Profile::load(const string& json_path) {
         ifstream file(json_path);
         if (!file.is_open())
@@ -22,16 +40,24 @@ namespace gene_hmm {
         p.name = j["name"];
 
         const auto& dataset = j["dataset"];
-        p.source_fasta_path = dataset["source_fasta"];
-        p.source_gff_path   = dataset["source_gff"];
-        p.train_fasta_path  = dataset["train_fasta"];
-        p.train_gff_path    = dataset["train_gff"];
-        p.test_fasta_path   = dataset["test_fasta"];
-        p.test_gff_path     = dataset["test_gff"];
-        for (const auto& c : dataset["test_chromosomes"])
-            p.test_chromosomes.push_back(c);
-        for (const auto& c : dataset["excluded_chromosomes"])
-            p.excluded_chromosomes.push_back(c);
+        if (dataset.contains("species")) {
+            for (const auto& species_json : dataset["species"])
+                p.species.push_back(parse_species_dataset(species_json));
+        } else {
+            p.species.push_back(parse_species_dataset(dataset));
+        }
+
+        if (!p.species.empty()) {
+            const auto& first = p.species.front();
+            p.source_fasta_path = first.source_fasta_path;
+            p.source_gff_path   = first.source_gff_path;
+            p.train_fasta_path  = first.train_fasta_path;
+            p.train_gff_path    = first.train_gff_path;
+            p.test_fasta_path   = first.test_fasta_path;
+            p.test_gff_path     = first.test_gff_path;
+            p.test_chromosomes  = first.test_chromosomes;
+            p.excluded_chromosomes = first.excluded_chromosomes;
+        }
 
         p.min_first_cds_bp     = j["filters"]["min_first_cds_bp"];
         p.min_last_cds_bp      = j["filters"]["min_last_cds_bp"];
