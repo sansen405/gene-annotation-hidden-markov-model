@@ -45,7 +45,6 @@ namespace gene_hmm {
         static Genome_Profile load(const string& json_path);
     };
 
-    //gene_hmm::profile = Genome_Profile::load("src/genome_profiles/yeast.json");
     extern Genome_Profile profile;
 
 }

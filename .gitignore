@@ -8,3 +8,14 @@ genome_data/s_pombe/
 genome_data/salmonella/
 # Legacy flat layout (pre full/train/test split).
 genome_data/*_data/
+
+# Local OS and Python-generated files.
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Local CNN training artifacts.
+src/model/cnn/trained_models/
+src/model/cnn/*_scores.tsv
