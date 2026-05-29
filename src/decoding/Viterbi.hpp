@@ -35,6 +35,17 @@ namespace gene_hmm {
                 size_t max_intron_body_length,
                 Log_Prob gene_start_penalty);
 
+            // Semi-Markov intron duration: when intron_length_log_prob is non-empty
+            // (indexed by intron body length), the geometric self-loop cost is
+            // dropped and log P(length) is charged once when the intron closes.
+            static vector<State> decode(const vector<Nucleotide>& nucleotides,
+                const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+                const Emission_Model& emission_model,
+                size_t min_intron_body_length,
+                size_t max_intron_body_length,
+                Log_Prob gene_start_penalty,
+                const vector<Log_Prob>& intron_length_log_prob);
+
 
     };
 }

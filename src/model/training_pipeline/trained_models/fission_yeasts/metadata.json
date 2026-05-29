@@ -1,0 +1,27 @@
+{
+  "emission_matrix": "emission_matrix.json",
+  "profile": "fission_yeasts",
+  "species_count": 4,
+  "splice_cnn": {
+    "acceptor_bias": 0.0,
+    "acceptor_scale": 1.0,
+    "donor_bias": 0.0,
+    "donor_scale": 1.0,
+    "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+    "test_scores": [
+      "genome_data/fission_yeasts/s_pombe/test/s_pombe_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_splice_cnn_scores.tsv"
+    ],
+    "train_scores": [
+      "genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_octosporus/train/s_octosporus_splice_cnn_scores.tsv",
+      "genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_splice_cnn_scores.tsv"
+    ]
+  },
+  "training_chromosomes": 66,
+  "transition_matrix": "transition_matrix.json",
+  "usable_training_intervals": 6448
+}

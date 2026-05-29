@@ -461,6 +461,58 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
 
+## Model Changes (3.1): Semi-Markov Intron Length Model
+
+Version 3.1 keeps the V3 calibrated CNN unchanged and adds an explicit intron
+**length** model to the decoder. This is a decode-only change — no CNN retrain and
+no new score files; only the Viterbi path and the validation runner change.
+
+Held-out fission-yeast validation at defaults (no calibration tuning), V3 -> V3.1:
+
+| Metric | V3 | V3.1 |
+| --- | --- | --- |
+| Exact 21-state accuracy | 0.9625 | **0.9663** |
+| Intron F1 | 0.8013 | **0.8119** |
+| &nbsp;&nbsp;intron precision | 0.7879 | **0.9370** |
+| &nbsp;&nbsp;intron recall | 0.8152 | 0.7162 |
+| Coding F1 | 0.9681 | **0.9700** |
+| Donor boundary | P 0.7919 / R 0.8977 | **P 0.9203** / R 0.7987 |
+| Acceptor boundary | P 0.7899 / R 0.8954 | **P 0.9267** / R 0.8043 |
+| Stop boundary | P 0.7761 / R 0.9147 | **P 0.7958 / R 0.9377** |
+
+What changed:
+
+- **Introns are now semi-Markov segments with an explicit length distribution.**
+  Previously the intron body length was governed only by a hard p95 cap plus the
+  geometric decay implied by the intron self-loop transition — which barely
+  penalized atypically long or short introns. The decoder now drops the per-step
+  self-loop cost for intron-body states and instead charges `log P(length)` once,
+  when the intron body closes into an acceptor. The length already tracked in the
+  Viterbi `intron_body_length` array supplies the duration.
+- **`log P(length)` is a smoothed empirical histogram of training introns.**
+  `build_intron_length_log_probs` (in the validation runner) builds an add-1
+  smoothed histogram of training intron-body lengths over `[1, p95]` and stores it
+  as log-probabilities indexed by length. Fission-yeast introns are tightly peaked
+  (~40-75 bp), so this replaces the wrong (flat-tailed) geometric prior with the
+  true distribution.
+- **`Viterbi::decode` gained a length-aware overload.** It takes
+  `const vector<Log_Prob>& intron_length_log_prob`; when empty, the decoder behaves
+  exactly as before (geometric), so existing call sites are unaffected.
+- **Effect: intron precision jumps from 0.79 to 0.94** (and donor/acceptor boundary
+  precision from ~0.79 to ~0.92) because length-implausible introns are now
+  rejected. The trade is some intron recall (0.82 -> 0.72): the p95 hard cap still
+  excludes long introns, and the explicit `P(length)` penalizes real introns that
+  fall in low-probability length bins. Net intron F1 still improves to 0.81 and
+  exact accuracy to 0.9663.
+- **Not yet in the production predictor.** The length model lives in the validation
+  decoder. To use it in `predict_fna.cpp`, the length distribution would need to be
+  persisted into the trained-model `metadata.json` and loaded at predict time.
+
+Recovering the lost recall is the next lever: raise the intron-body cap (e.g. p99)
+and let `P(length)` softly penalize long introns instead of hard-cutting at p95, and
+fit the gene-start penalty (still a flat 1.0, with ~4,353 predicted genes vs 3,694
+gold) to trim spurious genes.
+
 ## Model Changes (3.0): Calibrated CNN Splice Model (No Tuning Required)
 
 Version 3 is the current model. The splice CNN now **surpasses** the PSSM splice

@@ -80,10 +80,41 @@ namespace gene_hmm {
         size_t max_intron_body_length,
         Log_Prob gene_start_penalty)
     {
+        return decode(
+            nucleotides,
+            transition_log_probs,
+            emission_model,
+            min_intron_body_length,
+            max_intron_body_length,
+            gene_start_penalty,
+            {});
+    }
+
+    vector<State> Viterbi::decode(
+        const vector<Nucleotide>& nucleotides,
+        const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+        const Emission_Model& emission_model,
+        size_t min_intron_body_length,
+        size_t max_intron_body_length,
+        Log_Prob gene_start_penalty,
+        const vector<Log_Prob>& intron_length_log_prob)
+    {
         const size_t T = nucleotides.size();
         const size_t S = NUM_STATES;
 
         if (T == 0) return {};
+
+        // When a length distribution is supplied, introns are modeled as
+        // semi-Markov segments: drop the per-step geometric self-loop cost and
+        // charge log P(length) once when the body closes into an acceptor.
+        const bool use_length_model = !intron_length_log_prob.empty();
+        auto length_log_prob = [&](size_t length) -> Log_Prob {
+            if (intron_length_log_prob.empty()) {
+                return 0.0;
+            }
+            size_t index = min(length, intron_length_log_prob.size() - 1);
+            return intron_length_log_prob[index];
+        };
 
         Viterbi_Matrix     V(T, array<Log_Prob, S>{});
         Backpointer_Matrix B(T, array<State, S>{});
@@ -124,10 +155,20 @@ namespace gene_hmm {
                         continue;
                     }
 
+                    Log_Prob transition_term = transition_log_probs[idx(p)][idx(s)];
+                    if(use_length_model && is_intron_body_state(p) && p == s){
+                        transition_term = 0.0;
+                    }
+
                     Log_Prob curr_prob = V[t-1][idx(p)] +
-                                         transition_log_probs[idx(p)][idx(s)] -
+                                         transition_term -
                                          gene_entry_penalty(p, s, gene_start_penalty) +
                                          emission_model.emission_log_prob(s, t, nucleotides);
+
+                    if(use_length_model && is_intron_body_state(p) && is_acceptor_state(s)){
+                        curr_prob += length_log_prob(intron_body_length[t - 1][idx(p)]);
+                    }
+
                     if(curr_prob > max_prob){
                         max_prob = curr_prob;
                         max_prob_prev = p;

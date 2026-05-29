@@ -5,6 +5,7 @@
 #include "../src/parsers/FNA_Parser.hpp"
 #include "../src/parsers/GFF_Parser.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -20,6 +21,7 @@ using namespace gene_hmm;
 using namespace std;
 
 Log_Prob gene_start_penalty = 1.0;
+vector<Log_Prob> intron_length_log_probs;
 string splice_cnn_scores_path;
 Log_Prob donor_cnn_scale = 1.0;
 Log_Prob donor_cnn_bias = 0.0;
@@ -407,6 +409,39 @@ size_t percentile_length(vector<size_t> lengths, double percentile) {
     return lengths[index];
 }
 
+// Smoothed empirical histogram of training intron-body lengths over [1, max],
+// returned as log probabilities indexed by length. Add-1 smoothing keeps every
+// in-range length finite; the decoder caps the body length at `max`, so longer
+// lengths are unreachable. Replaces the implicit geometric duration with the
+// true (tightly peaked) intron length distribution.
+vector<Log_Prob> build_intron_length_log_probs(
+    const vector<size_t>& lengths,
+    size_t max_length)
+{
+    if (max_length == 0 || lengths.empty()) {
+        return {};
+    }
+
+    vector<double> counts(max_length + 1, 1.0);
+    counts[0] = 0.0;
+    for (size_t length : lengths) {
+        if (length >= 1 && length <= max_length) {
+            counts[length] += 1.0;
+        }
+    }
+
+    double total = 0.0;
+    for (size_t length = 1; length <= max_length; ++length) {
+        total += counts[length];
+    }
+
+    vector<Log_Prob> log_probs(max_length + 1, LOG_ZERO);
+    for (size_t length = 1; length <= max_length; ++length) {
+        log_probs[length] = log(counts[length] / total);
+    }
+    return log_probs;
+}
+
 vector<Interval> collect_intervals(
     const vector<State>& states,
     const string& chromosome,
@@ -789,7 +824,8 @@ Validation_Result decode_validation(
                 emission_model,
                 0,
                 max_intron_body_length,
-                gene_start_penalty);
+                gene_start_penalty,
+                intron_length_log_probs);
 
         if (chromosome_predicted.size() != chromosome_gold.size()) {
             throw runtime_error("Decoded path length mismatch on " + range.name + ".");
@@ -1032,6 +1068,7 @@ int main(int argc, char** argv) {
         acceptor_cnn_bias);
     vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_data.states, train_ranges);
     size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
+    intron_length_log_probs = build_intron_length_log_probs(train_intron_body_lengths, max_intron_body_length);
 
     if (tune_cnn_calibration) {
         tune_splice_cnn_calibration(
