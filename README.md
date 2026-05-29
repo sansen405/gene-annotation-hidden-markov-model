@@ -461,6 +461,32 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
 
+## Model Changes (2.4): Single CNN Calibration Layer
+
+- **The CNN scorer writes raw logits.**
+  `train_splice_cnn_scores.py` no longer applies an analytic log-odds prior
+  shift to the donor/acceptor scores. The score TSV is now the untransformed
+  CNN output, so there is one well-defined source of truth for the model's
+  splice signal.
+- **All splice calibration lives in one place.**
+  Donor/acceptor emissions are calibrated solely by the HMM's
+  `donor_scale`/`donor_bias`/`acceptor_scale`/`acceptor_bias` (profile fields or
+  validation CLI flags). The previous setup stacked a Python prior shift on top
+  of a separate C++ bias, and stale carried-over biases caused the decoder to
+  over-predict introns (intron precision collapsed to ~0.35). Folding everything
+  into the fitted `scale*logit + bias` removes that double correction.
+- **The calibration tuner searches a wider bias range.**
+  `--tune-cnn-calibration` now grid-searches donor/acceptor bias over
+  `{-4 ... 4}` so the optimum is not pinned to a grid edge. Because opening an
+  intron forces the decoded path through both a donor and an acceptor state, the
+  effective knobs are a shared `scale` and the *sum* `donor_bias + acceptor_bias`
+  (an "open an intron" prior); the tuner reflects this with ties along constant
+  bias sums.
+- **Calibration recovers the regression but does not by itself beat the PSSM
+  splice model.** After tuning, intron F1 recovers from ~0.47 to ~0.61 and exact
+  accuracy from ~0.906 to ~0.941, versus the PSSM baseline of ~0.73 / ~0.956.
+  The remaining gap is CNN splice discrimination, not calibration.
+
 ## Model Changes (2.3): Sparse CNN Scoring
 
 - **CNN score generation is sparse by default.**
