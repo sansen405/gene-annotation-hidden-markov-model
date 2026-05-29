@@ -468,14 +468,16 @@ model it replaced, and the donor/acceptor scores are self-calibrating, so the HM
 decodes at `scale=1, bias=0` with no `--tune-cnn-calibration` grid search.
 
 Held-out fission-yeast validation at defaults (all four test chromosomes,
-~11.7M bases):
+~11.7M bases, exact 21-state accuracy **0.9625**):
 
 | Metric | V2.4 (tuned) | V3 (defaults) |
 | --- | --- | --- |
-| Intron F1 | ~0.61–0.73 | **0.80** (P 0.79 / R 0.82) |
-| Coding F1 | ~0.958 | **0.968** |
-| Donor recall | ~0.43 | **~0.66** |
-| Acceptor recall | ~0.48 | **~0.67** |
+| Intron F1 | ~0.61–0.73 | **0.8013** (P 0.7879 / R 0.8152) |
+| Coding F1 | ~0.958 | **0.9681** (P 0.9485 / R 0.9887) |
+| Donor boundary | P ~0.65 / R ~0.43 | **P 0.7919 / R 0.8977** |
+| Acceptor boundary | P ~0.73 / R ~0.48 | **P 0.7899 / R 0.8954** |
+| Start boundary | P ~0.66 / R ~0.78 | **P 0.7281 / R 0.8581** |
+| Stop boundary | P ~0.76 / R ~0.89 | **P 0.7761 / R 0.9147** |
 
 What changed, and how the model is trained differently from earlier versions:
 
