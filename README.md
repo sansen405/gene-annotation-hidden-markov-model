@@ -279,6 +279,19 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
 /tmp/full_genome_validation
 ```
 
+CNN splice logits can be calibrated before Viterbi with profile fields
+(`donor_scale`, `donor_bias`, `acceptor_scale`, `acceptor_bias` under
+`splice_cnn`) or with validation CLI flags:
+
+```sh
+/tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json \
+  --tune-cnn-calibration
+```
+
+The tuner tests a compact set of donor/acceptor scale and bias candidates and
+selects the run that maximizes the average of intron F1, donor boundary F1, and
+acceptor boundary F1.
+
 The validation runner expects CNN splice-score files at the paths configured in
 `src/genome_profiles/fission_yeasts.json`. Generate or refresh them with:
 

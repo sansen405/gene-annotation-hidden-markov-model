@@ -80,6 +80,10 @@ namespace gene_hmm {
             if (splice_cnn.contains("test_scores")) {
                 p.splice_cnn.test_score_paths = parse_string_list(splice_cnn["test_scores"]);
             }
+            p.splice_cnn.donor_scale = splice_cnn.value("donor_scale", 1.0);
+            p.splice_cnn.donor_bias = splice_cnn.value("donor_bias", 0.0);
+            p.splice_cnn.acceptor_scale = splice_cnn.value("acceptor_scale", 1.0);
+            p.splice_cnn.acceptor_bias = splice_cnn.value("acceptor_bias", 0.0);
         }
 
         p.min_first_cds_bp     = j["filters"]["min_first_cds_bp"];

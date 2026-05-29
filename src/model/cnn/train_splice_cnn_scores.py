@@ -235,6 +235,13 @@ def sample_training_examples(
     return inputs, label_tensor
 
 
+def focal_loss(logits: torch.Tensor, targets: torch.Tensor, gamma: float = 2.0) -> torch.Tensor:
+    """Binary focal loss over multi-label logits. Down-weights easy negatives."""
+    bce = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+    p_t = torch.exp(-bce)
+    return ((1.0 - p_t) ** gamma * bce).mean()
+
+
 def train_model(
     model: SpliceCNN,
     inputs: torch.Tensor,
@@ -244,7 +251,6 @@ def train_model(
 ) -> None:
     loader = DataLoader(TensorDataset(inputs, labels), batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_fn = nn.BCEWithLogitsLoss()
     total_batches = len(loader)
 
     log(
@@ -258,7 +264,7 @@ def train_model(
         progress_interval = max(1, total_batches // 10)
         for batch_index, (batch_inputs, batch_labels) in enumerate(loader, start=1):
             optimizer.zero_grad()
-            loss = loss_fn(model(batch_inputs), batch_labels)
+            loss = focal_loss(model(batch_inputs), batch_labels)
             loss.backward()
             optimizer.step()
             total_loss += float(loss.item()) * batch_inputs.size(0)
@@ -270,7 +276,13 @@ def train_model(
         )
 
 
-def write_scores(model: SpliceCNN, dataset: FastaDataset, radius: int, output_path: Path, batch_size: int) -> None:
+def write_scores(
+    model: SpliceCNN,
+    dataset: FastaDataset,
+    radius: int,
+    output_path: Path,
+    batch_size: int,
+) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -306,7 +318,13 @@ def candidate_splice_positions(sequence: str) -> list[int]:
     return sorted(positions)
 
 
-def write_sparse_scores(model: SpliceCNN, dataset: FastaDataset, radius: int, output_path: Path, batch_size: int) -> None:
+def write_sparse_scores(
+    model: SpliceCNN,
+    dataset: FastaDataset,
+    radius: int,
+    output_path: Path,
+    batch_size: int,
+) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -439,7 +457,7 @@ def main() -> None:
     parser.add_argument("--model-out", type=Path)
     parser.add_argument("--train-scores-out", type=Path, nargs="+")
     parser.add_argument("--test-scores-out", type=Path, nargs="+")
-    parser.add_argument("--radius", default=40, type=int)
+    parser.add_argument("--radius", default=60, type=int)
     parser.add_argument("--epochs", default=5, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--score-batch-size", default=8192, type=int)
@@ -478,44 +496,40 @@ def main() -> None:
         log(f"loading existing CNN checkpoint: {args.model_out}")
         model.load_state_dict(torch.load(args.model_out, map_location="cpu"))
     else:
+        all_donors, all_acceptors = set(), set()
         input_batches: list[torch.Tensor] = []
         label_batches: list[torch.Tensor] = []
-        donor_total = 0
-        acceptor_total = 0
-
         for dataset, gff_path in zip(train_datasets, args.train_gff):
             donors, acceptors = splice_sites_from_gff(
-                gff_path,
-                dataset.offsets,
+                gff_path, dataset.offsets,
                 min_intron_bp=args.min_intron_bp,
                 require_3n_cds=args.require_3n_cds,
             )
-            donor_total += len(donors)
-            acceptor_total += len(acceptors)
+            all_donors |= donors
+            all_acceptors |= acceptors
             inputs, labels = sample_training_examples(
-                dataset,
-                donors,
-                acceptors,
-                args.radius,
-                args.negatives_per_positive,
+                dataset, donors, acceptors, args.radius, args.negatives_per_positive,
             )
             if len(labels) > 0:
                 input_batches.append(inputs)
                 label_batches.append(labels)
-
         if not input_batches:
             raise ValueError("No splice-site examples were found in the training inputs.")
-
-        log(f"training totals: donors={format_count(donor_total)} acceptors={format_count(acceptor_total)}")
+        log(
+            f"training totals: donors={format_count(len(all_donors))} "
+            f"acceptors={format_count(len(all_acceptors))}"
+        )
         log("combining training tensors")
         inputs = torch.cat(input_batches)
         labels = torch.cat(label_batches)
-
         train_model(model, inputs, labels, args.epochs, args.batch_size)
         args.model_out.parent.mkdir(parents=True, exist_ok=True)
         log(f"saving CNN checkpoint: {args.model_out}")
         torch.save(model.state_dict(), args.model_out)
 
+    # Raw CNN logits are written verbatim. All prior/scale correction happens in
+    # one place: the HMM's donor/acceptor scale+bias calibration (fit by the
+    # validation tuner), so the TSV stays the single, untransformed model output.
     for dataset, score_path in zip(train_datasets, args.train_scores_out):
         if args.sparse_scores:
             write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size)

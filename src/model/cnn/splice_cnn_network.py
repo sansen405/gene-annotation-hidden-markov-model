@@ -5,24 +5,43 @@ from torch import nn
 
 
 class SpliceCNN(nn.Module):
-    """Small 1D CNN for donor/acceptor splice-site scoring."""
+    """1D CNN for splice-site scoring with separate donor and acceptor backbones.
 
-    def __init__(self, window_size: int = 81, hidden_channels: int = 64) -> None:
+    Each backbone: Conv7 -> Conv5 -> dilated Conv3 (receptive field ~23 bp),
+    with BatchNorm + Dropout throughout and a global max-pool at the end.
+    Separate heads produce independent donor and acceptor logits.
+    Output shape: (batch, 2) — column 0 donor, column 1 acceptor.
+    """
+
+    def __init__(self, window_size: int = 121, hidden_channels: int = 128) -> None:
         super().__init__()
         self.window_size = window_size
 
-        self.features = nn.Sequential(
-            nn.Conv1d(in_channels=4, out_channels=hidden_channels, kernel_size=7, padding=3),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=hidden_channels, out_channels=hidden_channels, kernel_size=5, padding=2),
-            nn.ReLU(),
-            nn.AdaptiveMaxPool1d(1),
-        )
-        self.classifier = nn.Linear(hidden_channels, 2)
+        def _backbone() -> nn.Sequential:
+            return nn.Sequential(
+                nn.Conv1d(4, hidden_channels, kernel_size=7, padding=3),
+                nn.BatchNorm1d(hidden_channels),
+                nn.ReLU(),
+                nn.Dropout(p=0.2),
+                nn.Conv1d(hidden_channels, hidden_channels, kernel_size=5, padding=2),
+                nn.BatchNorm1d(hidden_channels),
+                nn.ReLU(),
+                # dilation=2 grows receptive field without adding parameters
+                nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=2, dilation=2),
+                nn.BatchNorm1d(hidden_channels),
+                nn.ReLU(),
+                nn.AdaptiveMaxPool1d(1),
+            )
+
+        self.donor_features = _backbone()
+        self.acceptor_features = _backbone()
+        self.donor_head = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(hidden_channels, 1))
+        self.acceptor_head = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(hidden_channels, 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        features = self.features(x).squeeze(-1)
-        return self.classifier(features)
+        donor_logit = self.donor_head(self.donor_features(x).squeeze(-1))
+        acceptor_logit = self.acceptor_head(self.acceptor_features(x).squeeze(-1))
+        return torch.cat([donor_logit, acceptor_logit], dim=1)
 
 
 def one_hot_encode_windows(windows: list[str]) -> torch.Tensor:

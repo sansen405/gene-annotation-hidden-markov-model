@@ -34,6 +34,10 @@ namespace gene_hmm {
         string model_path;
         vector<string> train_score_paths;
         vector<string> test_score_paths;
+        double donor_scale = 1.0;
+        double donor_bias = 0.0;
+        double acceptor_scale = 1.0;
+        double acceptor_bias = 0.0;
     };
 
     struct Genome_Profile {

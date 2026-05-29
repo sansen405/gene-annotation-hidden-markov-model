@@ -126,11 +126,20 @@ namespace gene_hmm {
             const vector<size_t>& offsets,
             size_t sequence_length);
         void set_splice_cnn_position_offset(size_t offset);
+        void set_splice_cnn_calibration(
+            Log_Prob donor_scale,
+            Log_Prob donor_bias,
+            Log_Prob acceptor_scale,
+            Log_Prob acceptor_bias);
 
     private:
         Splice_CNN_Scores splice_cnn;
         bool splice_cnn_scores_loaded = false;
         size_t splice_cnn_position_offset = 0;
+        Log_Prob donor_cnn_scale = 1.0;
+        Log_Prob donor_cnn_bias = 0.0;
+        Log_Prob acceptor_cnn_scale = 1.0;
+        Log_Prob acceptor_cnn_bias = 0.0;
     };
 
 }

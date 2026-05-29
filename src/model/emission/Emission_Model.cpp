@@ -352,14 +352,14 @@ namespace gene_hmm{
                     cerr << "CNN splice scores were not loaded before donor emissions were requested.\n";
                     throw runtime_error("Missing CNN splice scores for donor emissions.");
                 }
-                return splice_cnn.donor_log_odds(splice_cnn_position_offset + t);
+                return donor_cnn_scale * splice_cnn.donor_log_odds(splice_cnn_position_offset + t) + donor_cnn_bias;
             case Emission_Type::PSSM_ACCEPTOR:
                 if(!has_splice_consensus(nucleotides, t, Splice_Signal::ACCEPTOR)) return LOG_ZERO;
                 if(!splice_cnn_scores_loaded){
                     cerr << "CNN splice scores were not loaded before acceptor emissions were requested.\n";
                     throw runtime_error("Missing CNN splice scores for acceptor emissions.");
                 }
-                return splice_cnn.acceptor_log_odds(splice_cnn_position_offset + t);
+                return acceptor_cnn_scale * splice_cnn.acceptor_log_odds(splice_cnn_position_offset + t) + acceptor_cnn_bias;
             case Emission_Type::DETERMINISTIC:
                 if(state == State::START_CODON_1){
                     return start_codon_signal_log_prob(start_codon_lp, nucleotides, t, start_window_left, start_window_right);
@@ -400,6 +400,18 @@ namespace gene_hmm{
 
     void Emission_Model::set_splice_cnn_position_offset(size_t offset) {
         splice_cnn_position_offset = offset;
+    }
+
+    void Emission_Model::set_splice_cnn_calibration(
+        Log_Prob donor_scale,
+        Log_Prob donor_bias,
+        Log_Prob acceptor_scale,
+        Log_Prob acceptor_bias)
+    {
+        donor_cnn_scale = donor_scale;
+        donor_cnn_bias = donor_bias;
+        acceptor_cnn_scale = acceptor_scale;
+        acceptor_cnn_bias = acceptor_bias;
     }
 
 }

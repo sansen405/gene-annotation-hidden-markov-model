@@ -53,6 +53,10 @@
 
     "splice_cnn": {
         "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+        "donor_scale": 1.0,
+        "donor_bias": 0.0,
+        "acceptor_scale": 1.0,
+        "acceptor_bias": 0.0,
         "train_scores": [
             "genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv",
             "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_splice_cnn_scores.tsv",

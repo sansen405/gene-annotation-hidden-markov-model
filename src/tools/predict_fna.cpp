@@ -409,6 +409,11 @@ int main(int argc, char** argv) {
             throw runtime_error("--splice-cnn-scores PATH is required for CNN donor/acceptor emissions.");
         }
         emission_model.load_splice_cnn_scores(splice_cnn_scores_path, input_nucleotides.size());
+        emission_model.set_splice_cnn_calibration(
+            gene_hmm::profile.splice_cnn.donor_scale,
+            gene_hmm::profile.splice_cnn.donor_bias,
+            gene_hmm::profile.splice_cnn.acceptor_scale,
+            gene_hmm::profile.splice_cnn.acceptor_bias);
 
         json result;
         result["summary"] = {

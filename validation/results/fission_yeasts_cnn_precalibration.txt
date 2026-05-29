@@ -30,19 +30,30 @@ Decoding usable evaluation intervals
 === Full Genome Holdout Validation ===
 Metric                               Value
 Evaluated bases                   11746239
-Exact 21-state accuracy             0.9445
+Exact 21-state accuracy             0.9060
 Illegal transitions                      0
-Predicted gene intervals              4493
+Predicted gene intervals              3993
 Gold gene intervals                   3694
 Intron length cap p95                  196
 Gene start penalty                  1.0000
+CNN donor scale                     1.0000
+CNN donor bias                      2.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   3.5000
+
+Note: bias values carried over from old BCE model -- calibration sweep in progress.
+New model: separate donor/acceptor backbones, 3 conv layers (dilation=2), 128 channels,
+           121 bp window, focal loss (gamma=2), BatchNorm + Dropout.
+Intron recall recovered (37.5% -> 69.1%) but precision collapsed due to stale biases.
 
 Classification Metrics:
 Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
-coding            0.9521      0.9553      0.9537      0.9588   4977620    250624    233092   6284903
-intron            0.8848      0.3751      0.5268      0.9826    113788     14816    189578  11428057
+coding            0.8990      0.9784      0.9370      0.9417   5098139    572626    112573   5962901
+intron            0.3524      0.6915      0.4669      0.9592    209765    385440     93601  11057433
 
 Boundary Metrics:
 Boundary       Precision      Recall       Exact   Predicted        Gold
-start             0.6205      0.7547        2788        4493        3694
-stop              0.7205      0.8763        3237        4493        3694
+start             0.6374      0.6890        2545        3993        3694
+stop              0.6416      0.6936        2562        3993        3694
+donor             0.2913      0.5626        2211        7590        3930
+acceptor          0.3178      0.6137        2412        7590        3930
