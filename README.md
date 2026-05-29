@@ -534,7 +534,7 @@ Then run validation **without** the calibration flag:
 /tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json
 ```
 
-## Model Changes (2.4): Single CNN Calibration Layer
+## Model Changes (2.3): Single CNN Calibration Layer
 
 - **The CNN scorer writes raw logits.**
   `train_splice_cnn_scores.py` no longer applies an analytic log-odds prior
@@ -560,7 +560,7 @@ Then run validation **without** the calibration flag:
   accuracy from ~0.906 to ~0.941, versus the PSSM baseline of ~0.73 / ~0.956.
   The remaining gap is CNN splice discrimination, not calibration.
 
-## Model Changes (2.3): Sparse CNN Scoring
+## Model Changes (2.2): Sparse CNN Scoring
 
 - **CNN score generation is sparse by default.**
   The training pipeline writes donor/acceptor score TSV rows only for canonical
@@ -577,7 +577,7 @@ Then run validation **without** the calibration flag:
   Add `--dense-cnn-scores` to `train_cached_model.py` to force the old every-base
   score TSV behavior.
 
-## Model Changes (2.2): Cached Training Pipeline
+## Model Changes (2.1): Cached Training Pipeline
 
 - **The full training pipeline can be refreshed with one command.**
   `src/model/training_pipeline/train_cached_model.py` trains or reloads the CNN,
@@ -600,7 +600,7 @@ Then run validation **without** the calibration flag:
   epoch/batch progress, checkpoint saves, and score-writing progress so long
   runs do not appear stalled.
 
-## Model Changes (2.1): HMM + CNN Emissions
+## Model Changes (2.0): HMM + CNN Emissions
 
 - **Donor and acceptor emissions now come from CNN score files.**
   `DONOR_1/2/3` and `ACCEPTOR_1/2/3` still require canonical `GT`/`AG`, but
