@@ -461,6 +461,79 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
 
+## Model Changes (3.0): Calibrated CNN Splice Model (No Tuning Required)
+
+Version 3 is the current model. The splice CNN now **surpasses** the PSSM splice
+model it replaced, and the donor/acceptor scores are self-calibrating, so the HMM
+decodes at `scale=1, bias=0` with no `--tune-cnn-calibration` grid search.
+
+Held-out fission-yeast validation at defaults (all four test chromosomes,
+~11.7M bases):
+
+| Metric | V2.4 (tuned) | V3 (defaults) |
+| --- | --- | --- |
+| Intron F1 | ~0.61–0.73 | **0.80** (P 0.79 / R 0.82) |
+| Coding F1 | ~0.958 | **0.968** |
+| Donor recall | ~0.43 | **~0.66** |
+| Acceptor recall | ~0.48 | **~0.67** |
+
+What changed, and how the model is trained differently from earlier versions:
+
+- **Position-aware CNN, not a global-pooled one.** The backbone now ends in
+  `AdaptiveMaxPool1d(8)` (eight positional bins) instead of `AdaptiveMaxPool1d(1)`,
+  so each head keeps coarse information about *where* a motif sits relative to the
+  splice dinucleotide. The earlier global max-pool discarded position, which is the
+  single most informative cue for splice sites and the main reason the V2 CNN
+  trailed the positionally-anchored PSSM.
+- **Per-head asymmetric windows.** Inside `forward()`, the donor head crops a window
+  biased downstream of the GT (5' consensus) and the acceptor head crops a wide
+  upstream window (branch point + polypyrimidine tract before the AG). The input
+  windows are still 121 bp, so score-file generation and the TSV format are
+  unchanged.
+- **Both strands are trained on.** `splice_sites_from_gff` now keeps minus-strand
+  transcripts, tags each site with its strand, and `sample_training_examples`
+  reverse-complements minus-strand windows so every true site is presented in
+  canonical 5'->3' (GT/AG) orientation. This roughly **doubles** the positive set
+  (~6.6k -> ~13k donors/acceptors) without changing the plus-only decoder. Negatives
+  stay plus-orientation, so there is no strand leakage.
+- **Honest validation split + a real metric.** Training holds out a *seeded,
+  shuffled* 10% split (the previous tail split put only easy negatives from the last
+  species in validation) and logs per-epoch donor/acceptor **average precision
+  (AUPRC)** — a threshold-free measure of splice discrimination that is independent
+  of HMM calibration.
+- **Calibrated log-odds replace the tuning step.** Training uses plain
+  `BCEWithLogits` instead of focal loss (a proper scoring rule, so logits are
+  calibrated), then fits a single **temperature** on the held-out split and subtracts
+  the measured **training-prior logit** per head. The resulting transform
+  (`logit / temperature - prior_logit`) is applied when writing the score TSVs and is
+  saved inside the checkpoint. Because the training prior is *measured and removed*,
+  the negative:positive sampling ratio (1:5) no longer needs to match the genome's
+  (~1:450); the HMM transitions supply the true genomic prior. Typical fitted values:
+  `temperature ~ 1.37`, `donor/acceptor prior_logit ~ -2.40`.
+- **`--tune-cnn-calibration` is no longer needed.** It still exists for diagnostics,
+  but V3 validation is run without it; the calibrated scores already decode at
+  `scale=1, bias=0`. This supersedes the V2.4 conclusion that calibration tuning was
+  required and that the CNN could not beat the PSSM.
+- **Checkpoint format changed.** The `.pt` now stores
+  `{"state_dict": ..., "calibration": {temperature, donor_prior_logit,
+  acceptor_prior_logit}}` instead of a bare state dict. Old V2 checkpoints are
+  incompatible (both the architecture and the format changed) and must be retrained;
+  delete the cached `.pt` before refreshing the pipeline.
+
+Train/refresh exactly as before — the one-command pipeline is unchanged:
+
+```sh
+rm -f src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt
+python3 src/model/training_pipeline/train_cached_model.py \
+  --profile src/genome_profiles/fission_yeasts.json
+```
+
+Then run validation **without** the calibration flag:
+
+```sh
+/tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json
+```
+
 ## Model Changes (2.4): Single CNN Calibration Layer
 
 - **The CNN scorer writes raw logits.**

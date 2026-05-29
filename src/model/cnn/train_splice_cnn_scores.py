@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import time
 from collections import defaultdict
@@ -36,12 +37,39 @@ class FastaDataset:
         return sum(len(record.sequence) for record in self.records)
 
 
+@dataclass(frozen=True)
+class Calibration:
+    """Score-time transform that turns raw CNN logits into genomic-prior log-odds.
+
+    Removes the need for HMM scale/bias tuning: `temperature` fixes the scale
+    (what the old `scale` knob did), and subtracting the training-prior logit fixes
+    the offset (what the old `bias` knob did). After this, the written scores are
+    likelihood-ratio-style log-odds, so the HMM can decode at scale=1, bias=0.
+    """
+
+    temperature: float
+    donor_prior_logit: float
+    acceptor_prior_logit: float
+
+    def apply(self, donor_logit: float, acceptor_logit: float) -> tuple[float, float]:
+        donor = donor_logit / self.temperature - self.donor_prior_logit
+        acceptor = acceptor_logit / self.temperature - self.acceptor_prior_logit
+        return donor, acceptor
+
+
 def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
 def format_count(value: int) -> str:
     return f"{value:,}"
+
+
+_COMPLEMENT = {"A": "T", "C": "G", "G": "C", "T": "A", "N": "N"}
+
+
+def reverse_complement(sequence: str) -> str:
+    return "".join(_COMPLEMENT.get(base, "N") for base in reversed(sequence))
 
 
 def read_fasta(path: Path) -> FastaDataset:
@@ -96,9 +124,15 @@ def splice_sites_from_gff(
     offsets: dict[str, int],
     min_intron_bp: int,
     require_3n_cds: bool,
-) -> tuple[set[int], set[int]]:
+) -> tuple[dict[int, str], dict[int, str]]:
+    """Return donor and acceptor positions mapped to their transcript strand.
+
+    Both strands are kept. Minus-strand sites are reported at their plus-genome
+    coordinate but tagged "-" so the caller can reverse-complement the window and
+    present every true site to the model in canonical 5'->3' (GT/AG) orientation.
+    """
     cds_by_parent: dict[str, list[tuple[int, int]]] = defaultdict(list)
-    supported_parent: dict[str, bool] = defaultdict(lambda: True)
+    strand_by_parent: dict[str, str] = {}
 
     log(f"loading splice sites from GFF: {gff_path}")
     start_time = time.perf_counter()
@@ -121,16 +155,16 @@ def splice_sites_from_gff(
             start_0 = offsets[chrom] + int(start) - 1
             end_0 = offsets[chrom] + int(end) - 1
             cds_by_parent[key].append((start_0, end_0))
-            if strand != "+":
-                supported_parent[key] = False
+            strand_by_parent[key] = strand
 
-    donors: set[int] = set()
-    acceptors: set[int] = set()
+    donors: dict[int, str] = {}
+    acceptors: dict[int, str] = {}
     for key, fragments in cds_by_parent.items():
         fragments.sort()
-        total_cds = sum(end - start + 1 for start, end in fragments)
-        if not supported_parent[key]:
+        strand = strand_by_parent.get(key, "+")
+        if strand not in ("+", "-"):
             continue
+        total_cds = sum(end - start + 1 for start, end in fragments)
         if require_3n_cds and total_cds % 3 != 0:
             continue
 
@@ -144,8 +178,17 @@ def splice_sites_from_gff(
             continue
 
         for left, right in zip(fragments, fragments[1:]):
-            donors.add(left[1] + 1)
-            acceptors.add(right[0] - 1)
+            intron_start = left[1] + 1  # first intron base (low coord)
+            intron_end = right[0] - 1   # last intron base (high coord)
+            if strand == "+":
+                # Plus strand: GT donor at intron start, AG acceptor at intron end.
+                donors[intron_start] = "+"
+                acceptors[intron_end] = "+"
+            else:
+                # Minus strand: 5' donor is at the high-coordinate end; the window
+                # is reverse-complemented later so it reads GT/AG canonically.
+                donors[intron_end] = "-"
+                acceptors[intron_start] = "-"
 
     log(
         f"loaded splice sites: donors={format_count(len(donors))} "
@@ -166,14 +209,14 @@ def window_at(sequence: str, center: int, radius: int) -> str:
 
 def sample_training_examples(
     dataset: FastaDataset,
-    donors: set[int],
-    acceptors: set[int],
+    donors: dict[int, str],
+    acceptors: dict[int, str],
     radius: int,
     negatives_per_positive: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     log(f"sampling examples from {dataset.path}")
     start_time = time.perf_counter()
-    positives = sorted(donors | acceptors)
+    positives = sorted(set(donors) | set(acceptors))
     positive_set = set(positives)
     candidate_negatives: list[tuple[FastaRecord, int, int]] = []
     positive_sites_by_record: dict[str, list[int]] = defaultdict(list)
@@ -218,7 +261,13 @@ def sample_training_examples(
     for record in dataset.records:
         for pos in positive_sites_by_record[record.name]:
             local_pos = pos - record.offset
-            windows.append(window_at(record.sequence, local_pos, radius))
+            window = window_at(record.sequence, local_pos, radius)
+            # Minus-strand sites are presented reverse-complemented so the model
+            # always sees a canonical GT/AG window, regardless of source strand.
+            strand = donors.get(pos) or acceptors.get(pos) or "+"
+            if strand == "-":
+                window = reverse_complement(window)
+            windows.append(window)
             labels.append([1.0 if pos in donors else 0.0, 1.0 if pos in acceptors else 0.0])
     for record, local_pos, _ in negatives:
         windows.append(window_at(record.sequence, local_pos, radius))
@@ -235,11 +284,55 @@ def sample_training_examples(
     return inputs, label_tensor
 
 
-def focal_loss(logits: torch.Tensor, targets: torch.Tensor, gamma: float = 2.0) -> torch.Tensor:
-    """Binary focal loss over multi-label logits. Down-weights easy negatives."""
-    bce = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
-    p_t = torch.exp(-bce)
-    return ((1.0 - p_t) ** gamma * bce).mean()
+def bce_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Plain binary cross-entropy. A proper scoring rule, so the trained logits are
+    calibrated log-odds. Focal loss (the previous choice) deliberately reshapes the
+    loss surface and leaves the logit scale uncalibrated, which is what forced the
+    downstream scale/bias tuning."""
+    return nn.functional.binary_cross_entropy_with_logits(logits, targets)
+
+
+def fit_temperature(logits: torch.Tensor, labels: torch.Tensor) -> float:
+    """Temperature scaling: fit one scalar on held-out logits so predicted
+    probabilities match observed frequencies. Optimizes log-temperature (keeping
+    temperature positive) by minimizing BCE. This is the automatic replacement for
+    the hand-tuned emission `scale`."""
+    log_temp = torch.zeros(1, requires_grad=True)
+    optimizer = torch.optim.LBFGS([log_temp], lr=0.1, max_iter=50)
+
+    def closure() -> torch.Tensor:
+        optimizer.zero_grad()
+        loss = nn.functional.binary_cross_entropy_with_logits(logits / log_temp.exp(), labels)
+        loss.backward()
+        return loss
+
+    optimizer.step(closure)
+    return float(log_temp.exp().item())
+
+
+def average_precision(scores: torch.Tensor, targets: torch.Tensor) -> float:
+    """Area under the precision-recall curve for one binary column.
+
+    Threshold-free, so it reflects splice discrimination on the heavily imbalanced
+    candidate set far better than focal loss alone. Returns NaN if no positives.
+    """
+    n_pos = float(targets.sum().item())
+    if n_pos == 0:
+        return float("nan")
+    order = torch.argsort(scores, descending=True)
+    sorted_targets = targets[order]
+    tp = torch.cumsum(sorted_targets, dim=0)
+    fp = torch.cumsum(1.0 - sorted_targets, dim=0)
+    precision = tp / (tp + fp)
+    return float((precision * sorted_targets).sum().item() / n_pos)
+
+
+def detect_device() -> "torch.device":
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
 
 def train_model(
@@ -248,14 +341,40 @@ def train_model(
     labels: torch.Tensor,
     epochs: int,
     batch_size: int,
-) -> None:
-    loader = DataLoader(TensorDataset(inputs, labels), batch_size=batch_size, shuffle=True)
+    device: "torch.device",
+) -> Calibration:
+    # Seeded shuffle before splitting: examples are concatenated positives-first,
+    # then per species, so an unshuffled tail split would put only easy negatives
+    # from the last species in validation. Shuffling makes the held-out 10 %
+    # representative (positives from every species) so AUPRC is meaningful.
+    generator = torch.Generator().manual_seed(13)
+    perm = torch.randperm(len(inputs), generator=generator)
+    inputs = inputs[perm]
+    labels = labels[perm]
+
+    # Hold out 10 % of examples to monitor overfitting without touching test data.
+    n_val = max(1, len(inputs) // 10)
+    n_train = len(inputs) - n_val
+    train_inputs, val_inputs = inputs[:n_train], inputs[n_train:]
+    train_labels, val_labels = labels[:n_train], labels[n_train:]
+
+    # DataLoader feeds CPU tensors; each batch is moved to device inside the loop.
+    loader = DataLoader(TensorDataset(train_inputs, train_labels), batch_size=batch_size, shuffle=True)
+    model = model.to(device)
+    # Val tensors are small enough to pre-load onto device.
+    val_inputs = val_inputs.to(device)
+    val_labels = val_labels.to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    # Cosine annealing decays lr from 1e-3 to 0 over all epochs, which improves
+    # convergence under focal loss where gradients shrink as easy examples saturate.
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     total_batches = len(loader)
 
     log(
-        f"starting CNN training: examples={format_count(len(inputs))} "
-        f"epochs={epochs} batch_size={batch_size} batches_per_epoch={format_count(total_batches)}"
+        f"starting CNN training: train={format_count(n_train)} val={format_count(n_val)} "
+        f"epochs={epochs} batch_size={batch_size} batches_per_epoch={format_count(total_batches)} "
+        f"device={device}"
     )
     model.train()
     for epoch in range(epochs):
@@ -263,17 +382,57 @@ def train_model(
         total_loss = 0.0
         progress_interval = max(1, total_batches // 10)
         for batch_index, (batch_inputs, batch_labels) in enumerate(loader, start=1):
+            batch_inputs = batch_inputs.to(device)
+            batch_labels = batch_labels.to(device)
             optimizer.zero_grad()
-            loss = focal_loss(model(batch_inputs), batch_labels)
+            loss = bce_loss(model(batch_inputs), batch_labels)
             loss.backward()
             optimizer.step()
             total_loss += float(loss.item()) * batch_inputs.size(0)
             if batch_index == total_batches or batch_index % progress_interval == 0:
                 log(f"epoch {epoch + 1}/{epochs}: batch {batch_index}/{total_batches}")
+        scheduler.step()
+        model.eval()
+        with torch.no_grad():
+            val_logits = model(val_inputs)
+            val_loss = float(bce_loss(val_logits, val_labels).item())
+            val_probs = torch.sigmoid(val_logits).cpu()
+        val_targets = val_labels.cpu()
+        donor_ap = average_precision(val_probs[:, 0], val_targets[:, 0])
+        acceptor_ap = average_precision(val_probs[:, 1], val_targets[:, 1])
+        model.train()
         log(
             f"finished epoch {epoch + 1}/{epochs}: "
-            f"loss={total_loss / len(inputs):.4f} elapsed={time.perf_counter() - epoch_start:.1f}s"
+            f"train_loss={total_loss / n_train:.4f} val_loss={val_loss:.4f} "
+            f"val_donor_ap={donor_ap:.4f} val_acceptor_ap={acceptor_ap:.4f} "
+            f"lr={scheduler.get_last_lr()[0]:.2e} elapsed={time.perf_counter() - epoch_start:.1f}s"
         )
+
+    # Fit the score-time calibration so the HMM can decode at scale=1, bias=0.
+    model.eval()
+    with torch.no_grad():
+        final_val_logits = model(val_inputs).cpu()
+    final_val_labels = val_labels.cpu()
+    temperature = fit_temperature(final_val_logits, final_val_labels)
+
+    def to_logit(p: float) -> float:
+        p = min(max(p, 1e-6), 1.0 - 1e-6)
+        return math.log(p / (1.0 - p))
+
+    # Subtract the *training* prior so the score becomes a likelihood ratio; the HMM
+    # transitions then supply the true genomic prior. The training ratio no longer
+    # needs to match the genome — whatever ratio was used is measured and removed.
+    calibration = Calibration(
+        temperature=temperature,
+        donor_prior_logit=to_logit(float(train_labels[:, 0].mean())),
+        acceptor_prior_logit=to_logit(float(train_labels[:, 1].mean())),
+    )
+    log(
+        f"fitted calibration: temperature={calibration.temperature:.4f} "
+        f"donor_prior_logit={calibration.donor_prior_logit:.4f} "
+        f"acceptor_prior_logit={calibration.acceptor_prior_logit:.4f}"
+    )
+    return calibration
 
 
 def write_scores(
@@ -282,6 +441,8 @@ def write_scores(
     radius: int,
     output_path: Path,
     batch_size: int,
+    device: "torch.device",
+    calibration: Calibration,
 ) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -298,10 +459,11 @@ def write_scores(
             for start in range(0, len(record.sequence), batch_size):
                 end = min(start + batch_size, len(record.sequence))
                 windows = [window_at(record.sequence, pos, radius) for pos in range(start, end)]
-                logits = model(one_hot_encode_windows(windows))
+                logits = model(one_hot_encode_windows(windows).to(device)).cpu()
                 for offset, row in enumerate(logits):
                     position = record.offset + start + offset
-                    output.write(f"{position}\t{float(row[0]):.8f}\t{float(row[1]):.8f}\n")
+                    donor, acceptor = calibration.apply(float(row[0]), float(row[1]))
+                    output.write(f"{position}\t{donor:.8f}\t{acceptor:.8f}\n")
                 written_bases += end - start
                 progress = int((written_bases / max(1, dataset.base_count)) * 100)
                 if progress >= next_progress:
@@ -324,6 +486,8 @@ def write_sparse_scores(
     radius: int,
     output_path: Path,
     batch_size: int,
+    device: "torch.device",
+    calibration: Calibration,
 ) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,10 +510,11 @@ def write_sparse_scores(
             for start in range(0, len(positions), batch_size):
                 batch_positions = positions[start : start + batch_size]
                 windows = [window_at(record.sequence, pos, radius) for pos in batch_positions]
-                logits = model(one_hot_encode_windows(windows))
+                logits = model(one_hot_encode_windows(windows).to(device)).cpu()
                 for local_pos, row in zip(batch_positions, logits):
                     position = record.offset + local_pos
-                    output.write(f"{position}\t{float(row[0]):.8f}\t{float(row[1]):.8f}\n")
+                    donor, acceptor = calibration.apply(float(row[0]), float(row[1]))
+                    output.write(f"{position}\t{donor:.8f}\t{acceptor:.8f}\n")
                 written_candidates += len(batch_positions)
                 progress = int((written_candidates / max(1, total_candidates)) * 100)
                 if progress >= next_progress:
@@ -458,7 +623,7 @@ def main() -> None:
     parser.add_argument("--train-scores-out", type=Path, nargs="+")
     parser.add_argument("--test-scores-out", type=Path, nargs="+")
     parser.add_argument("--radius", default=60, type=int)
-    parser.add_argument("--epochs", default=5, type=int)
+    parser.add_argument("--epochs", default=10, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--score-batch-size", default=8192, type=int)
     parser.add_argument("--sparse-scores", action="store_true")
@@ -486,6 +651,9 @@ def main() -> None:
     validate_output_counts("training", args.train_fasta, args.train_scores_out)
     validate_output_counts("test", args.test_fasta, args.test_scores_out)
 
+    device = detect_device()
+    log(f"device: {device}")
+
     log("starting splice CNN score pipeline")
     log(f"model checkpoint: {args.model_out}")
     train_datasets = [read_fasta(path) for path in args.train_fasta]
@@ -494,9 +662,18 @@ def main() -> None:
 
     if args.model_out.exists():
         log(f"loading existing CNN checkpoint: {args.model_out}")
-        model.load_state_dict(torch.load(args.model_out, map_location="cpu"))
+        checkpoint = torch.load(args.model_out, map_location="cpu")
+        model.load_state_dict(checkpoint["state_dict"])
+        model = model.to(device)
+        calibration = Calibration(**checkpoint["calibration"])
+        log(
+            f"loaded calibration: temperature={calibration.temperature:.4f} "
+            f"donor_prior_logit={calibration.donor_prior_logit:.4f} "
+            f"acceptor_prior_logit={calibration.acceptor_prior_logit:.4f}"
+        )
     else:
-        all_donors, all_acceptors = set(), set()
+        all_donors: dict[int, str] = {}
+        all_acceptors: dict[int, str] = {}
         input_batches: list[torch.Tensor] = []
         label_batches: list[torch.Tensor] = []
         for dataset, gff_path in zip(train_datasets, args.train_gff):
@@ -505,8 +682,8 @@ def main() -> None:
                 min_intron_bp=args.min_intron_bp,
                 require_3n_cds=args.require_3n_cds,
             )
-            all_donors |= donors
-            all_acceptors |= acceptors
+            all_donors.update(donors)
+            all_acceptors.update(acceptors)
             inputs, labels = sample_training_examples(
                 dataset, donors, acceptors, args.radius, args.negatives_per_positive,
             )
@@ -522,24 +699,35 @@ def main() -> None:
         log("combining training tensors")
         inputs = torch.cat(input_batches)
         labels = torch.cat(label_batches)
-        train_model(model, inputs, labels, args.epochs, args.batch_size)
+        calibration = train_model(model, inputs, labels, args.epochs, args.batch_size, device)
         args.model_out.parent.mkdir(parents=True, exist_ok=True)
         log(f"saving CNN checkpoint: {args.model_out}")
-        torch.save(model.state_dict(), args.model_out)
+        # Save on CPU so the checkpoint is device-agnostic. Calibration travels with
+        # the weights so reloading reproduces identical scores without refitting.
+        torch.save(
+            {
+                "state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
+                "calibration": {
+                    "temperature": calibration.temperature,
+                    "donor_prior_logit": calibration.donor_prior_logit,
+                    "acceptor_prior_logit": calibration.acceptor_prior_logit,
+                },
+            },
+            args.model_out,
+        )
 
-    # Raw CNN logits are written verbatim. All prior/scale correction happens in
-    # one place: the HMM's donor/acceptor scale+bias calibration (fit by the
-    # validation tuner), so the TSV stays the single, untransformed model output.
+    # Scores are written as calibrated log-odds (temperature + training-prior shift
+    # applied here), so the HMM can decode at scale=1, bias=0 with no grid tuning.
     for dataset, score_path in zip(train_datasets, args.train_scores_out):
         if args.sparse_scores:
-            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
         else:
-            write_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+            write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
     for dataset, score_path in zip(test_datasets, args.test_scores_out):
         if args.sparse_scores:
-            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
         else:
-            write_scores(model, dataset, args.radius, score_path, args.score_batch_size)
+            write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
     log("finished splice CNN score pipeline")
 
 
