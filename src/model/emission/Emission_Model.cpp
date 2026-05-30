@@ -362,7 +362,12 @@ namespace gene_hmm{
                 return acceptor_cnn_scale * splice_cnn.acceptor_log_odds(splice_cnn_position_offset + t) + acceptor_cnn_bias;
             case Emission_Type::DETERMINISTIC:
                 if(state == State::START_CODON_1){
-                    return start_codon_signal_log_prob(start_codon_lp, nucleotides, t, start_window_left, start_window_right);
+                    if(!has_splice_consensus(nucleotides, t, Splice_Signal::START_CODON)) return LOG_ZERO;
+                    if(!start_cnn_scores_loaded){
+                        cerr << "CNN start scores were not loaded before start emissions were requested.\n";
+                        throw runtime_error("Missing CNN start scores for start emissions.");
+                    }
+                    return start_cnn_scale * start_cnn.start_log_odds(start_cnn_position_offset + t) + start_cnn_bias;
                 }
                 return deterministic_log_prob(state, t, nucleotides);
         }
@@ -412,6 +417,43 @@ namespace gene_hmm{
         donor_cnn_bias = donor_bias;
         acceptor_cnn_scale = acceptor_scale;
         acceptor_cnn_bias = acceptor_bias;
+    }
+
+    void Emission_Model::load_start_cnn_scores(const string& score_path, size_t sequence_length) {
+        if(score_path.empty()){
+            cerr << "CNN start score path is empty; start emissions cannot use CNN predictions.\n";
+            throw runtime_error("Missing CNN start score path.");
+        }
+        if(!start_cnn.load_scores(score_path, sequence_length)){
+            cerr << "CNN start scores did not load from: " << score_path << "\n";
+            throw runtime_error("Missing CNN start score file.");
+        }
+        start_cnn_scores_loaded = true;
+    }
+
+    void Emission_Model::load_start_cnn_scores(
+        const vector<string>& score_paths,
+        const vector<size_t>& offsets,
+        size_t sequence_length)
+    {
+        if(score_paths.empty()){
+            cerr << "CNN start score paths are empty; start emissions cannot use CNN predictions.\n";
+            throw runtime_error("Missing CNN start score paths.");
+        }
+        if(!start_cnn.load_scores(score_paths, offsets, sequence_length)){
+            cerr << "CNN start scores did not load from one or more profile score paths.\n";
+            throw runtime_error("Missing CNN start score file.");
+        }
+        start_cnn_scores_loaded = true;
+    }
+
+    void Emission_Model::set_start_cnn_position_offset(size_t offset) {
+        start_cnn_position_offset = offset;
+    }
+
+    void Emission_Model::set_start_cnn_calibration(Log_Prob start_scale, Log_Prob start_bias) {
+        start_cnn_scale = start_scale;
+        start_cnn_bias = start_bias;
     }
 
 }

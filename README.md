@@ -33,11 +33,17 @@ Gene_Analysis_HMM/
 │   │   │   ├── train_cached_model.py
 │   │   │   ├── train_hmm_matrices.cpp
 │   │   │   └── trained_models/     # local cached HMM artifacts, gitignored
-│   │   └── cnn/
-│   │       ├── Splice_CNN_Scores.hpp/.cpp
-│   │       ├── splice_cnn_network.py
-│   │       ├── train_splice_cnn_scores.py
-│   │       └── trained_models/     # local .pt checkpoints, gitignored
+│   │   └── cnn/                    # one subfolder per CNN-scored signal
+│   │       ├── splice/             # donor/acceptor splice CNN
+│   │       │   ├── Splice_CNN_Scores.hpp/.cpp
+│   │       │   ├── splice_cnn_network.py
+│   │       │   ├── train_splice_cnn_scores.py
+│   │       │   └── trained_models/ # local .pt checkpoints, gitignored
+│   │       └── start/              # translation-start CNN (mirrors splice)
+│   │           ├── Start_CNN_Scores.hpp/.cpp
+│   │           ├── start_cnn_network.py
+│   │           ├── train_start_cnn_scores.py
+│   │           └── trained_models/ # local .pt checkpoints, gitignored
 │   ├── decoding/
 │   │   ├── Viterbi.hpp
 │   │   ├── Viterbi.cpp
@@ -97,6 +103,12 @@ Defines the shared vocabulary used across the project:
     `TAG`, and `TGA`.
 
 ### `src/model/cnn/`
+Each CNN-scored signal lives in its own subfolder so additional signal models
+(e.g. a translation-start CNN) slot in without disturbing the others. Every
+subfolder follows the same `*_cnn_network.py` / `train_*_cnn_scores.py` /
+`*_CNN_Scores.hpp/.cpp` / `trained_models/` layout.
+
+`src/model/cnn/splice/` (donor/acceptor):
 - **`splice_cnn_network.py`** — PyTorch 1D CNN that scores donor and acceptor
   splice-site potential from one-hot DNA windows.
 - **`train_splice_cnn_scores.py`** — trains the CNN when no cached checkpoint is
@@ -104,6 +116,15 @@ Defines the shared vocabulary used across the project:
   per-position score TSV files.
 - **`Splice_CNN_Scores`** — C++ bridge that loads those score TSV files and
   exposes donor/acceptor log-odds to `Emission_Model`.
+
+`src/model/cnn/start/` (translation start):
+- **`start_cnn_network.py`** — position-aware 1D CNN that scores translation-start
+  potential from one-hot DNA windows centered on an `ATG`.
+- **`train_start_cnn_scores.py`** — trains/reloads the start CNN and writes
+  per-position start score TSV files, mirroring the splice trainer.
+- **`Start_CNN_Scores`** — C++ bridge that loads start score TSV files and exposes
+  a start log-odds to `Emission_Model`. The `START_CODON_1` emission requires these
+  scores (it throws if they are missing), mirroring the donor/acceptor CNN.
 
 ### `src/model/training_pipeline/`
 - **`train_cached_model.py`** — one-command local cache refresh. It trains or
@@ -204,7 +225,7 @@ Each profile in `src/genome_profiles/` follows this shape:
   },
 
   "splice_cnn": {
-    "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+    "model": "src/model/cnn/splice/trained_models/fission_yeasts_splice_cnn.pt",
     "train_scores": [
       "genome_data/fission_yeasts/s_pombe/train/s_pombe_splice_cnn_scores.tsv"
     ],
@@ -256,7 +277,8 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
   src/model/emission/Emission_Model.cpp \
-  src/model/cnn/Splice_CNN_Scores.cpp \
+  src/model/cnn/splice/Splice_CNN_Scores.cpp \
+  src/model/cnn/start/Start_CNN_Scores.cpp \
   -o /tmp/gene_hmm_tests
 
 /tmp/gene_hmm_tests
@@ -273,7 +295,8 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
   src/model/emission/Emission_Model.cpp \
-  src/model/cnn/Splice_CNN_Scores.cpp \
+  src/model/cnn/splice/Splice_CNN_Scores.cpp \
+  src/model/cnn/start/Start_CNN_Scores.cpp \
   -o /tmp/full_genome_validation
 
 /tmp/full_genome_validation
@@ -296,7 +319,7 @@ The validation runner expects CNN splice-score files at the paths configured in
 `src/genome_profiles/fission_yeasts.json`. Generate or refresh them with:
 
 ```sh
-python3 src/model/cnn/train_splice_cnn_scores.py \
+python3 src/model/cnn/splice/train_splice_cnn_scores.py \
   --train-fasta \
     genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna \
     genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna \
@@ -335,6 +358,39 @@ python3 src/model/training_pipeline/train_cached_model.py \
   --profile src/genome_profiles/fission_yeasts.json
 ```
 
+### Selecting which CNN models to train
+
+`train_cached_model.py` trains/refreshes one or more signal CNNs, chosen with
+`--cnn` (default: all of them). Each trainer reloads an existing `.pt` checkpoint
+instead of retraining, so a selected-but-already-trained model is just a fast
+score refresh. To (re)train only the start CNN while leaving an already-trained
+splice model untouched:
+
+```sh
+python3 src/model/training_pipeline/train_cached_model.py \
+  --profile src/genome_profiles/fission_yeasts.json --cnn start
+```
+
+`--cnn splice start` runs both (the default), and `--skip-cnn` skips all CNN
+refreshes. The start CNN reads its paths from the profile `start_cnn` block
+(`model`, `train_scores`, `test_scores`), mirroring `splice_cnn`.
+
+The start CNN can also be trained directly, like the splice CNN:
+
+```sh
+python3 src/model/cnn/start/train_start_cnn_scores.py \
+  --profile src/genome_profiles/fission_yeasts.json --sparse-scores
+```
+
+At decode time the start scores are **required**, like splice donor/acceptor: the
+`START_CODON_1` emission uses the calibrated start log-odds and throws if no start
+scores are loaded. Validation loads them from `start_cnn.test_scores` in the
+profile (or `--start-cnn-scores PATH`); the predictor takes `--start-cnn-scores`:
+
+```sh
+/tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json
+```
+
 This writes local artifacts under
 `src/model/training_pipeline/trained_models/fission_yeasts/`:
 `transition_matrix.json`, `emission_matrix.json`, and `metadata.json`. The
@@ -360,7 +416,8 @@ clang++ -std=c++17 -Isrc -I/opt/homebrew/include \
   src/parsers/FNA_Parser.cpp \
   src/parsers/GFF_Parser.cpp \
   src/model/emission/Emission_Model.cpp \
-  src/model/cnn/Splice_CNN_Scores.cpp \
+  src/model/cnn/splice/Splice_CNN_Scores.cpp \
+  src/model/cnn/start/Start_CNN_Scores.cpp \
   -o /tmp/hmm_predict_fna
 ```
 
@@ -386,7 +443,7 @@ with source.open() as input_file, out.open("w") as output_file:
 print(out)
 PY
 
-python3 src/model/cnn/train_splice_cnn_scores.py \
+python3 src/model/cnn/splice/train_splice_cnn_scores.py \
   --train-fasta \
     genome_data/fission_yeasts/s_pombe/train/s_pombe_train.fna \
     genome_data/fission_yeasts/s_japonicus/train/s_japonicus_train.fna \
@@ -460,6 +517,71 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 `src/tools/predict_fna.cpp`. The predictor requires `--splice-cnn-scores` when
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
+
+## Model Changes (4.0): Position-Aware Start CNN (Replaces the Start PSSM)
+
+Version 4 is the current model. The translation-start emission (`START_CODON_1`)
+is no longer a position-specific scoring matrix — it now comes from a dedicated
+position-aware start CNN, mirroring the splice donor/acceptor CNN. A single
+calibration bias, **fit on the training split**, sets the operating point. The
+start CNN now **surpasses** the PSSM start model it replaced.
+
+Held-out fission-yeast validation at defaults (all four test chromosomes,
+~11.7M bases). Baseline is V3.1 (start PSSM); V4 is the calibrated start CNN
+(`start_scale=1.0, start_bias=-6.0`):
+
+| Metric | V3.1 (start PSSM) | V4 (start CNN, tuned) |
+| --- | --- | --- |
+| Exact 21-state accuracy | 0.9663 | **0.9709** |
+| Predicted genes (gold 3694) | 4353 | **3680** |
+| Coding F1 | 0.9700 | **0.9749** |
+| Intron F1 | 0.8119 | 0.8114 |
+| Start boundary | P 0.7262 / R 0.8557 (F1 0.786) | **P 0.8484 / R 0.8452 (F1 0.847)** |
+| Stop boundary | P 0.7958 / R 0.9377 (F1 0.861) | **P 0.9174 / R 0.9139 (F1 0.916)** |
+| Donor boundary | P 0.9203 / R 0.7987 | P 0.9104 / R 0.7985 |
+| Acceptor boundary | P 0.9267 / R 0.8043 | P 0.9121 / R 0.8000 |
+
+What changed:
+
+- **The start emission is a CNN, not a PSSM.** `START_CODON_1` requires
+  per-position translation-start log-odds produced by the new start CNN; there is
+  **no PSSM fallback** (the emission throws if start scores are missing), exactly
+  like the donor/acceptor CNN. The old start-codon PSSM and its window parameters
+  are no longer on the decode path.
+- **New `src/model/cnn/start/` model.** `start_cnn_network.py` is a position-aware
+  1D CNN with an asymmetric crop around the ATG (≈20 bp upstream / 60 bp downstream,
+  biologically grounded in the start context and Kozak-like signal).
+  `train_start_cnn_scores.py` samples true starts as positives and other in-frame
+  ATGs as negatives, trains with `BCEWithLogits`, and writes calibrated sparse score
+  TSVs (one row per ATG candidate). `Start_CNN_Scores` (C++) loads those TSVs and
+  feeds `Emission_Model`, mirroring `Splice_CNN_Scores`.
+- **CNN folder reorganized per signal.** `src/model/cnn/` now has `splice/` and
+  `start/` subfolders so additional signal models slot in without disturbing the
+  others. The splice CNN was moved into `splice/` unchanged — **no splice retrain
+  is required** for V4.
+- **Calibration bias is fit on the training split (no test leakage).** The start
+  log-odds are real log-odds, but their operating point relative to the gene-start
+  penalty and competing transitions is set by `start_scale`/`start_bias`. The new
+  `--tune-start-calibration` mode grid-searches `start_scale × start_bias` by
+  decoding a subset of the **training** genomes and maximizing start-boundary F1,
+  then restores the held-out test scores for the final report. The fit selected
+  `scale=1.0, bias=-6.0`, now stored in the profile `start_cnn` block.
+- **Effect: the start CNN converts extra recall into precision.** Uncalibrated
+  (`bias=0`) the CNN over-opens genes (4592 predicted, start P 0.706). The fitted
+  `bias=-6.0` collapses spurious starts so predicted genes (3680) match the 3694
+  gold count, lifting start F1 0.786 → 0.847, stop F1 0.861 → 0.916, coding F1
+  0.970 → 0.975, and exact 21-state accuracy 0.9663 → 0.9709. The start-offset
+  diagnostic also shows fewer downstream/in-frame shifts and fewer missed gold
+  starts than the PSSM.
+- **Pipeline can train CNNs selectively.** `train_cached_model.py` gained a `--cnn`
+  flag (`splice`, `start`, or both) so an already-trained splice CNN is left alone
+  while only the start CNN is (re)trained: `--cnn start`.
+- **Predictor requires start scores too.** `predict_fna.cpp` now takes
+  `--start-cnn-scores` (no PSSM fallback), alongside the existing
+  `--splice-cnn-scores`.
+
+The next lever is the gene-start penalty (still a flat 1.0) and recovering the
+small intron-recall trade carried over from V3.1.
 
 ## Model Changes (3.1): Semi-Markov Intron Length Model
 
@@ -577,7 +699,7 @@ What changed, and how the model is trained differently from earlier versions:
 Train/refresh exactly as before — the one-command pipeline is unchanged:
 
 ```sh
-rm -f src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt
+rm -f src/model/cnn/splice/trained_models/fission_yeasts_splice_cnn.pt
 python3 src/model/training_pipeline/train_cached_model.py \
   --profile src/genome_profiles/fission_yeasts.json
 ```
@@ -668,7 +790,7 @@ Then run validation **without** the calibration flag:
   score TSVs for the HMM.
 - **The trained fission yeast CNN checkpoint is local.**
   The profile points to
-  `src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt`; this file is
+  `src/model/cnn/splice/trained_models/fission_yeasts_splice_cnn.pt`; this file is
   intentionally gitignored so it can be cached locally without committing model
   weights.
 - **The model folder is split by responsibility.** HMM transition logic lives in

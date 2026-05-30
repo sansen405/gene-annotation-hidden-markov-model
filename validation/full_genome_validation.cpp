@@ -29,7 +29,11 @@ Log_Prob donor_cnn_scale = 1.0;
 Log_Prob donor_cnn_bias = 0.0;
 Log_Prob acceptor_cnn_scale = 1.0;
 Log_Prob acceptor_cnn_bias = 0.0;
+string start_cnn_scores_path;
+Log_Prob start_cnn_scale = 1.0;
+Log_Prob start_cnn_bias = 0.0;
 bool tune_cnn_calibration = false;
+bool tune_start_calibration = false;
 bool tune_only = false;
 size_t tune_subset_ranges = 64;
 bool collect_start_positions = false;
@@ -143,6 +147,14 @@ double calibration_objective(const Validation_Result& result) {
         binary_f1(result.intron_total) +
         boundary_f1(result.donor_exact, result.donor_predicted, result.donor_gold) +
         boundary_f1(result.acceptor_exact, result.acceptor_predicted, result.acceptor_gold)) / 3.0;
+}
+
+// Start calibration is fit against exact start-boundary F1 alone: it balances
+// recovering true starts (recall) against the over-opening that an untuned
+// start-CNN bias produces (precision), which is exactly the trade-off the
+// start_scale/start_bias knobs control.
+double start_calibration_objective(const Validation_Result& result) {
+    return boundary_f1(result.start_exact, result.start_predicted, result.start_gold);
 }
 
 Binary_Metrics binary_metrics(
@@ -696,7 +708,11 @@ void print_usage(const string& program_name) {
     cerr << "  --cnn-donor-bias VALUE   Donor CNN logit offset, default from profile or 0.0\n";
     cerr << "  --cnn-acceptor-scale VALUE  Acceptor CNN logit multiplier, default from profile or 1.0\n";
     cerr << "  --cnn-acceptor-bias VALUE   Acceptor CNN logit offset, default from profile or 0.0\n";
-    cerr << "  --tune-cnn-calibration   Grid-search CNN calibration on the evaluation labels\n";
+    cerr << "  --start-cnn-scores PATH  CNN start score TSV for evaluation sequence (else profile start_cnn.test_scores)\n";
+    cerr << "  --cnn-start-scale VALUE  Start CNN logit multiplier, default from profile or 1.0\n";
+    cerr << "  --cnn-start-bias VALUE   Start CNN logit offset, default from profile or 0.0\n";
+    cerr << "  --tune-cnn-calibration   Grid-search splice CNN calibration on the evaluation labels\n";
+    cerr << "  --tune-start-calibration Grid-search start CNN scale/bias on the TRAINING labels\n";
     cerr << "  --tune-only              Stop after selecting CNN calibration\n";
     cerr << "  --tune-subset-ranges N   Usable evaluation intervals for tuning, default 64\n";
     cerr << "  --gene-start-penalty VALUE  Log-prob penalty on INTERGENIC -> START_CODON_1, default 1.0\n";
@@ -725,12 +741,18 @@ Genome_Profile parse_args(int argc, char** argv) {
     bool donor_bias_set = false;
     bool acceptor_scale_set = false;
     bool acceptor_bias_set = false;
+    bool start_scale_set = false;
+    bool start_bias_set = false;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             print_usage(argv[0]);
             exit(0);
+        }
+        if (arg == "--tune-start-calibration") {
+            tune_start_calibration = true;
+            continue;
         }
         if (arg == "--tune-cnn-calibration") {
             tune_cnn_calibration = true;
@@ -773,6 +795,14 @@ Genome_Profile parse_args(int argc, char** argv) {
         } else if (arg == "--cnn-acceptor-bias") {
             acceptor_cnn_bias = stod(value);
             acceptor_bias_set = true;
+        } else if (arg == "--start-cnn-scores") {
+            start_cnn_scores_path = value;
+        } else if (arg == "--cnn-start-scale") {
+            start_cnn_scale = stod(value);
+            start_scale_set = true;
+        } else if (arg == "--cnn-start-bias") {
+            start_cnn_bias = stod(value);
+            start_bias_set = true;
         } else if (arg == "--tune-subset-ranges") {
             tune_subset_ranges = stoull(value);
         } else if (arg == "--gene-start-penalty") {
@@ -819,6 +849,8 @@ Genome_Profile parse_args(int argc, char** argv) {
     if (!donor_bias_set) donor_cnn_bias = profile.splice_cnn.donor_bias;
     if (!acceptor_scale_set) acceptor_cnn_scale = profile.splice_cnn.acceptor_scale;
     if (!acceptor_bias_set) acceptor_cnn_bias = profile.splice_cnn.acceptor_bias;
+    if (!start_scale_set) start_cnn_scale = profile.start_cnn.start_scale;
+    if (!start_bias_set) start_cnn_bias = profile.start_cnn.start_bias;
 
     return profile;
 }
@@ -972,6 +1004,7 @@ Validation_Result decode_validation(
 
     for (const auto& range : eval_ranges) {
         emission_model.set_splice_cnn_position_offset(range.start);
+        emission_model.set_start_cnn_position_offset(range.start);
         vector<Nucleotide> chromosome_nucleotides =
             slice_nucleotides(eval_data.nucleotides, range.start, range.end);
         vector<State> chromosome_gold =
@@ -1164,6 +1197,80 @@ void tune_splice_cnn_calibration(
          << "\n";
 }
 
+// Fits start_scale/start_bias on the TRAINING split so the reported test
+// numbers are honest (no tuning on the evaluation genomes). The caller must
+// have loaded the start-CNN TRAIN scores onto emission_model before this runs.
+void tune_start_cnn_calibration(
+    Emission_Model& emission_model,
+    const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+    const Sequence_Data& train_data,
+    const vector<Chromosome_Range>& train_ranges,
+    size_t max_intron_body_length)
+{
+    const vector<Log_Prob> scales{0.50, 0.75, 1.00, 1.25};
+    // The untuned start CNN over-opens genes, so the operating bias is expected
+    // to be negative (make starts costlier). Search a wide one-sided range.
+    const vector<Log_Prob> biases{-6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0};
+
+    const vector<Chromosome_Range> tuning_ranges =
+        evenly_spaced_ranges(train_ranges, tune_subset_ranges);
+
+    double best_objective = -1.0;
+    Log_Prob best_scale = start_cnn_scale;
+    Log_Prob best_bias = start_cnn_bias;
+    size_t tried = 0;
+    const size_t total = scales.size() * biases.size();
+
+    cout << "\nTuning start-CNN calibration on TRAINING labels"
+         << " objective=start boundary F1\n";
+    cout << "Tuning subset: " << tuning_ranges.size()
+         << "/" << train_ranges.size()
+         << " usable training intervals\n";
+
+    for (Log_Prob scale : scales) {
+        for (Log_Prob bias : biases) {
+            emission_model.set_start_cnn_calibration(scale, bias);
+            Validation_Result result = decode_validation(
+                emission_model,
+                transition_log_probs,
+                train_data,
+                tuning_ranges,
+                max_intron_body_length,
+                false);
+            double objective = start_calibration_objective(result);
+            tried++;
+
+            cout << "  candidate " << tried << "/" << total
+                 << " objective=" << fixed << setprecision(4) << objective
+                 << " start_scale=" << scale
+                 << " start_bias=" << bias
+                 << " predicted=" << result.start_predicted
+                 << " gold=" << result.start_gold
+                 << "\n";
+
+            if (objective > best_objective) {
+                best_objective = objective;
+                best_scale = scale;
+                best_bias = bias;
+                cout << "  new best objective=" << fixed << setprecision(4) << best_objective
+                     << " start_scale=" << scale
+                     << " start_bias=" << bias
+                     << "\n";
+            }
+        }
+    }
+
+    start_cnn_scale = best_scale;
+    start_cnn_bias = best_bias;
+    emission_model.set_start_cnn_calibration(start_cnn_scale, start_cnn_bias);
+
+    cout << "Selected start-CNN calibration:"
+         << " start_scale=" << start_cnn_scale
+         << " start_bias=" << start_cnn_bias
+         << " objective=" << best_objective
+         << "\n";
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -1229,9 +1336,78 @@ int main(int argc, char** argv) {
         donor_cnn_bias,
         acceptor_cnn_scale,
         acceptor_cnn_bias);
+
+    // Translation-start CNN scores are required, like splice donor/acceptor.
+    if (!start_cnn_scores_path.empty()) {
+        emission_model.load_start_cnn_scores(start_cnn_scores_path, eval_data.nucleotides.size());
+    } else if (!gene_hmm::profile.start_cnn.test_score_paths.empty()) {
+        if (gene_hmm::profile.start_cnn.test_score_paths.size() != eval_data.dataset_offsets.size()) {
+            cerr << "Profile start_cnn.test_scores count does not match evaluation datasets.\n";
+            return 1;
+        }
+        emission_model.load_start_cnn_scores(
+            gene_hmm::profile.start_cnn.test_score_paths,
+            eval_data.dataset_offsets,
+            eval_data.nucleotides.size());
+    } else {
+        cerr << "Provide --start-cnn-scores or define start_cnn.test_scores in the profile.\n";
+        return 1;
+    }
+    emission_model.set_start_cnn_calibration(start_cnn_scale, start_cnn_bias);
+
     vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_data.states, train_ranges);
     size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
     intron_length_log_probs = build_intron_length_log_probs(train_intron_body_lengths, max_intron_body_length);
+
+    if (tune_start_calibration) {
+        // Fit start_scale/start_bias on the TRAINING split (decoding train
+        // genomes), then restore the evaluation scores so the final report is
+        // measured on held-out genomes at the selected operating point.
+        const auto& splice_train_paths = gene_hmm::profile.splice_cnn.train_score_paths;
+        const auto& start_train_paths = gene_hmm::profile.start_cnn.train_score_paths;
+        if (splice_train_paths.size() != train_data.dataset_offsets.size() ||
+            start_train_paths.size() != train_data.dataset_offsets.size()) {
+            cerr << "Profile train_scores count does not match training datasets;"
+                 << " cannot fit start calibration.\n";
+            return 1;
+        }
+        emission_model.load_splice_cnn_scores(
+            splice_train_paths, train_data.dataset_offsets, train_data.nucleotides.size());
+        emission_model.load_start_cnn_scores(
+            start_train_paths, train_data.dataset_offsets, train_data.nucleotides.size());
+
+        tune_start_cnn_calibration(
+            emission_model,
+            transition_log_probs,
+            train_data,
+            train_ranges,
+            max_intron_body_length);
+
+        // Restore evaluation scores exactly as they were originally loaded.
+        if (!splice_cnn_scores_path.empty()) {
+            emission_model.load_splice_cnn_scores(splice_cnn_scores_path, eval_data.nucleotides.size());
+        } else {
+            emission_model.load_splice_cnn_scores(
+                gene_hmm::profile.splice_cnn.test_score_paths,
+                eval_data.dataset_offsets,
+                eval_data.nucleotides.size());
+        }
+        if (!start_cnn_scores_path.empty()) {
+            emission_model.load_start_cnn_scores(start_cnn_scores_path, eval_data.nucleotides.size());
+        } else {
+            emission_model.load_start_cnn_scores(
+                gene_hmm::profile.start_cnn.test_score_paths,
+                eval_data.dataset_offsets,
+                eval_data.nucleotides.size());
+        }
+        emission_model.set_splice_cnn_calibration(
+            donor_cnn_scale, donor_cnn_bias, acceptor_cnn_scale, acceptor_cnn_bias);
+        emission_model.set_start_cnn_calibration(start_cnn_scale, start_cnn_bias);
+
+        if (tune_only) {
+            return 0;
+        }
+    }
 
     if (tune_cnn_calibration) {
         tune_splice_cnn_calibration(
@@ -1329,6 +1505,8 @@ int main(int argc, char** argv) {
     cout << left << setw(28) << "CNN donor bias" << right << setw(14) << donor_cnn_bias << "\n";
     cout << left << setw(28) << "CNN acceptor scale" << right << setw(14) << acceptor_cnn_scale << "\n";
     cout << left << setw(28) << "CNN acceptor bias" << right << setw(14) << acceptor_cnn_bias << "\n";
+    cout << left << setw(28) << "CNN start scale" << right << setw(14) << start_cnn_scale << "\n";
+    cout << left << setw(28) << "CNN start bias" << right << setw(14) << start_cnn_bias << "\n";
 
     cout << "\nClassification Metrics:\n";
     print_binary_metrics_header();

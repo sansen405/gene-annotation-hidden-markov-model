@@ -52,7 +52,7 @@
     },
 
     "splice_cnn": {
-        "model": "src/model/cnn/trained_models/fission_yeasts_splice_cnn.pt",
+        "model": "src/model/cnn/splice/trained_models/fission_yeasts_splice_cnn.pt",
         "donor_scale": 1.0,
         "donor_bias": 0.0,
         "acceptor_scale": 1.0,
@@ -68,6 +68,24 @@
             "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_splice_cnn_scores.tsv",
             "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_splice_cnn_scores.tsv",
             "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_splice_cnn_scores.tsv"
+        ]
+    },
+
+    "start_cnn": {
+        "model": "src/model/cnn/start/trained_models/fission_yeasts_start_cnn.pt",
+        "start_scale": 1.0,
+        "start_bias": -6.0,
+        "train_scores": [
+            "genome_data/fission_yeasts/s_pombe/train/s_pombe_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_japonicus/train/s_japonicus_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_octosporus/train/s_octosporus_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_cryophilus/train/s_cryophilus_start_cnn_scores.tsv"
+        ],
+        "test_scores": [
+            "genome_data/fission_yeasts/s_pombe/test/s_pombe_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_japonicus/test/s_japonicus_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_octosporus/test/s_octosporus_start_cnn_scores.tsv",
+            "genome_data/fission_yeasts/s_cryophilus/test/s_cryophilus_start_cnn_scores.tsv"
         ]
     },
 

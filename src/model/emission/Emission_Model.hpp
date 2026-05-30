@@ -2,7 +2,8 @@
 
 #include "../../topology/Topology.hpp"
 #include "../../parsers/FNA_Parser.hpp"
-#include "../cnn/Splice_CNN_Scores.hpp"
+#include "../cnn/splice/Splice_CNN_Scores.hpp"
+#include "../cnn/start/Start_CNN_Scores.hpp"
 #include <array>
 #include <cstdint>
 #include <unordered_map>
@@ -132,6 +133,17 @@ namespace gene_hmm {
             Log_Prob acceptor_scale,
             Log_Prob acceptor_bias);
 
+        // Optional translation-start CNN. When start scores are loaded the
+        // START_CODON_1 emission uses the calibrated start log-odds; otherwise it
+        // falls back to the trained start-codon PSSM (current default behavior).
+        void load_start_cnn_scores(const string& score_path, size_t sequence_length);
+        void load_start_cnn_scores(
+            const vector<string>& score_paths,
+            const vector<size_t>& offsets,
+            size_t sequence_length);
+        void set_start_cnn_position_offset(size_t offset);
+        void set_start_cnn_calibration(Log_Prob start_scale, Log_Prob start_bias);
+
     private:
         Splice_CNN_Scores splice_cnn;
         bool splice_cnn_scores_loaded = false;
@@ -140,6 +152,12 @@ namespace gene_hmm {
         Log_Prob donor_cnn_bias = 0.0;
         Log_Prob acceptor_cnn_scale = 1.0;
         Log_Prob acceptor_cnn_bias = 0.0;
+
+        Start_CNN_Scores start_cnn;
+        bool start_cnn_scores_loaded = false;
+        size_t start_cnn_position_offset = 0;
+        Log_Prob start_cnn_scale = 1.0;
+        Log_Prob start_cnn_bias = 0.0;
     };
 
 }

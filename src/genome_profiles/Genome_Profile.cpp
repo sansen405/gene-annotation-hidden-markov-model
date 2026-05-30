@@ -86,6 +86,19 @@ namespace gene_hmm {
             p.splice_cnn.acceptor_bias = splice_cnn.value("acceptor_bias", 0.0);
         }
 
+        if (j.contains("start_cnn")) {
+            const auto& start_cnn = j["start_cnn"];
+            p.start_cnn.model_path = start_cnn.value("model", "");
+            if (start_cnn.contains("train_scores")) {
+                p.start_cnn.train_score_paths = parse_string_list(start_cnn["train_scores"]);
+            }
+            if (start_cnn.contains("test_scores")) {
+                p.start_cnn.test_score_paths = parse_string_list(start_cnn["test_scores"]);
+            }
+            p.start_cnn.start_scale = start_cnn.value("start_scale", 1.0);
+            p.start_cnn.start_bias = start_cnn.value("start_bias", 0.0);
+        }
+
         p.min_first_cds_bp     = j["filters"]["min_first_cds_bp"];
         p.min_last_cds_bp      = j["filters"]["min_last_cds_bp"];
         p.min_intron_bp        = j["filters"]["min_intron_bp"];

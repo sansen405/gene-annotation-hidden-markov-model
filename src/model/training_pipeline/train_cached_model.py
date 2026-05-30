@@ -32,7 +32,8 @@ def compile_hmm_trainer(binary_path: Path, cxx: str) -> None:
             "src/model/training_pipeline/train_hmm_matrices.cpp",
             "src/model/transition/Transition_Model.cpp",
             "src/model/emission/Emission_Model.cpp",
-            "src/model/cnn/Splice_CNN_Scores.cpp",
+            "src/model/cnn/splice/Splice_CNN_Scores.cpp",
+            "src/model/cnn/start/Start_CNN_Scores.cpp",
             "src/genome_profiles/Genome_Profile.cpp",
             "src/parsers/FNA_Parser.cpp",
             "src/parsers/GFF_Parser.cpp",
@@ -43,7 +44,17 @@ def compile_hmm_trainer(binary_path: Path, cxx: str) -> None:
     )
 
 
+# Each CNN signal maps to its trainer script. The trainers load an existing
+# checkpoint when one is present (skipping retraining) and only regenerate the
+# score TSVs, so selecting an already-trained model is a cheap score refresh.
+CNN_TRAINERS = {
+    "splice": "src/model/cnn/splice/train_splice_cnn_scores.py",
+    "start": "src/model/cnn/start/train_start_cnn_scores.py",
+}
+
+
 def refresh_cnn_scores(
+    cnn: str,
     profile_path: Path,
     python: str,
     score_batch_size: int,
@@ -51,7 +62,7 @@ def refresh_cnn_scores(
 ) -> None:
     command = [
         python,
-        "src/model/cnn/train_splice_cnn_scores.py",
+        CNN_TRAINERS[cnn],
         "--profile",
         str(profile_path.relative_to(REPO_ROOT) if profile_path.is_relative_to(REPO_ROOT) else profile_path),
         "--score-batch-size",
@@ -62,7 +73,7 @@ def refresh_cnn_scores(
 
     run(
         command,
-        "training/loading CNN and refreshing splice score files",
+        f"training/loading {cnn} CNN and refreshing {cnn} score files",
     )
 
 
@@ -77,7 +88,16 @@ def main() -> None:
     parser.add_argument("--cxx", default="clang++")
     parser.add_argument("--cnn-score-batch-size", default=8192, type=int)
     parser.add_argument("--dense-cnn-scores", action="store_true")
-    parser.add_argument("--skip-cnn", action="store_true")
+    parser.add_argument(
+        "--cnn",
+        nargs="+",
+        choices=sorted(CNN_TRAINERS),
+        default=sorted(CNN_TRAINERS),
+        help="Which CNN signal models to train/refresh. Each trainer reloads an "
+             "existing checkpoint (no retrain) and just refreshes its scores, so "
+             "e.g. '--cnn start' leaves an already-trained splice model untouched.",
+    )
+    parser.add_argument("--skip-cnn", action="store_true", help="Skip all CNN score refreshes.")
     parser.add_argument("--skip-compile", action="store_true")
     args = parser.parse_args()
 
@@ -87,12 +107,17 @@ def main() -> None:
 
     log(f"starting cached model pipeline profile={profile_path}")
     if not args.skip_cnn:
-        refresh_cnn_scores(
-            profile_path,
-            args.python,
-            args.cnn_score_batch_size,
-            sparse_scores=not args.dense_cnn_scores,
-        )
+        # Preserve a stable order (splice before start) regardless of CLI order.
+        selected = [cnn for cnn in sorted(CNN_TRAINERS) if cnn in set(args.cnn)]
+        log(f"CNN models to refresh: {', '.join(selected)}")
+        for cnn in selected:
+            refresh_cnn_scores(
+                cnn,
+                profile_path,
+                args.python,
+                args.cnn_score_batch_size,
+                sparse_scores=not args.dense_cnn_scores,
+            )
     else:
         log("skipping CNN score refresh")
 

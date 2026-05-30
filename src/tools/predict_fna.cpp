@@ -388,6 +388,7 @@ int main(int argc, char** argv) {
         string input_fna = value_after_arg(argc, argv, "--fna", "");
         string profile_path = value_after_arg(argc, argv, "--profile", "");
         string splice_cnn_scores_path = value_after_arg(argc, argv, "--splice-cnn-scores", "");
+        string start_cnn_scores_path = value_after_arg(argc, argv, "--start-cnn-scores", "");
         if(input_fna.empty()){
             throw runtime_error("--fna PATH is required.");
         }
@@ -415,6 +416,15 @@ int main(int argc, char** argv) {
             gene_hmm::profile.splice_cnn.acceptor_scale,
             gene_hmm::profile.splice_cnn.acceptor_bias);
 
+        // Translation-start CNN scores are required for START_CODON_1 emissions.
+        if(start_cnn_scores_path.empty()){
+            throw runtime_error("--start-cnn-scores PATH is required for CNN start emissions.");
+        }
+        emission_model.load_start_cnn_scores(start_cnn_scores_path, input_nucleotides.size());
+        emission_model.set_start_cnn_calibration(
+            gene_hmm::profile.start_cnn.start_scale,
+            gene_hmm::profile.start_cnn.start_bias);
+
         json result;
         result["summary"] = {
             {"inputFile", input_fna.substr(input_fna.find_last_of("/\\") + 1)},
@@ -430,6 +440,7 @@ int main(int argc, char** argv) {
 
         for(const auto& range : input_ranges){
             emission_model.set_splice_cnn_position_offset(range.start);
+            emission_model.set_start_cnn_position_offset(range.start);
             vector<Nucleotide> chromosome_nucleotides = slice_nucleotides(input_nucleotides, range.start, range.end);
             vector<State> chromosome_states = Viterbi::decode(
                 chromosome_nucleotides,
