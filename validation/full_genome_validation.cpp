@@ -23,6 +23,12 @@ using namespace gene_hmm;
 using namespace std;
 
 Log_Prob gene_start_penalty = 1.0;
+// p99 unlocks the long-tail introns the old p95 cap structurally excluded.
+double intron_cap_percentile = 0.99;
+// Temperature on log P(L): T > 1 flattens the intron length distribution so real
+// introns at unusual lengths get a smaller penalty (recovers recall without
+// blowing up false-intron precision).
+Log_Prob intron_length_temperature = 2.0;
 vector<Log_Prob> intron_length_log_probs;
 string splice_cnn_scores_path;
 Log_Prob donor_cnn_scale = 1.0;
@@ -428,7 +434,8 @@ size_t percentile_length(vector<size_t> lengths, double percentile) {
 // true (tightly peaked) intron length distribution.
 vector<Log_Prob> build_intron_length_log_probs(
     const vector<size_t>& lengths,
-    size_t max_length)
+    size_t max_length,
+    Log_Prob temperature)
 {
     if (max_length == 0 || lengths.empty()) {
         return {};
@@ -447,9 +454,12 @@ vector<Log_Prob> build_intron_length_log_probs(
         total += counts[length];
     }
 
+    // Dividing log P by temperature > 1 flattens the distribution: typical lengths
+    // are still preferred, but penalties on rare-but-real lengths are reduced.
+    const Log_Prob effective_temperature = (temperature > 0.0) ? temperature : 1.0;
     vector<Log_Prob> log_probs(max_length + 1, LOG_ZERO);
     for (size_t length = 1; length <= max_length; ++length) {
-        log_probs[length] = log(counts[length] / total);
+        log_probs[length] = log(counts[length] / total) / effective_temperature;
     }
     return log_probs;
 }
@@ -704,7 +714,9 @@ void print_usage(const string& program_name) {
     cerr << "  --start-window-left N    Start-codon PSSM bases upstream of the ATG (retrains the PSSM), default 6\n";
     cerr << "  --start-window-right N   Start-codon PSSM bases from the ATG onward (>=3 covers ATG), default 9\n";
     cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
-    cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n\n";
+    cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n";
+    cerr << "  --intron-cap-percentile VALUE  Training-length percentile used as the intron-body cap, default 0.99\n";
+    cerr << "  --intron-length-temperature VALUE  Softening factor on log P(intron length); >1 flattens, default 2.0\n\n";
     cerr << "Example:\n";
     cerr << "  " << program_name
          << " --name c_elegans"
@@ -787,6 +799,10 @@ Genome_Profile parse_args(int argc, char** argv) {
             profile.transition_alpha = stod(value);
         } else if (arg == "--emission-alpha") {
             profile.emission_alpha = stod(value);
+        } else if (arg == "--intron-cap-percentile") {
+            intron_cap_percentile = stod(value);
+        } else if (arg == "--intron-length-temperature") {
+            intron_length_temperature = stod(value);
         } else {
             cerr << "Unknown argument: " << arg << "\n";
             print_usage(argv[0]);
@@ -981,7 +997,7 @@ Validation_Result decode_validation(
                 chromosome_nucleotides,
                 transition_log_probs,
                 emission_model,
-                0,
+                static_cast<size_t>(gene_hmm::profile.min_intron_bp),
                 max_intron_body_length,
                 gene_start_penalty,
                 intron_length_log_probs);
@@ -1230,8 +1246,9 @@ int main(int argc, char** argv) {
         acceptor_cnn_scale,
         acceptor_cnn_bias);
     vector<size_t> train_intron_body_lengths = collect_intron_body_lengths(train_data.states, train_ranges);
-    size_t max_intron_body_length = percentile_length(train_intron_body_lengths, 0.95);
-    intron_length_log_probs = build_intron_length_log_probs(train_intron_body_lengths, max_intron_body_length);
+    size_t max_intron_body_length = percentile_length(train_intron_body_lengths, intron_cap_percentile);
+    intron_length_log_probs = build_intron_length_log_probs(
+        train_intron_body_lengths, max_intron_body_length, intron_length_temperature);
 
     if (tune_cnn_calibration) {
         tune_splice_cnn_calibration(
@@ -1323,7 +1340,10 @@ int main(int argc, char** argv) {
     cout << left << setw(28) << "Illegal transitions" << right << setw(14) << result.illegal_transitions << "\n";
     cout << left << setw(28) << "Predicted gene intervals" << right << setw(14) << result.predicted_gene_intervals.size() << "\n";
     cout << left << setw(28) << "Gold gene intervals" << right << setw(14) << result.gold_gene_intervals.size() << "\n";
-    cout << left << setw(28) << "Intron length cap p95" << right << setw(14) << max_intron_body_length << "\n";
+    cout << left << setw(28) << "Intron length cap (bp)" << right << setw(14) << max_intron_body_length << "\n";
+    cout << left << setw(28) << "Intron cap percentile" << right << setw(14) << intron_cap_percentile << "\n";
+    cout << left << setw(28) << "Intron length temperature" << right << setw(14) << intron_length_temperature << "\n";
+    cout << left << setw(28) << "Min intron body length" << right << setw(14) << gene_hmm::profile.min_intron_bp << "\n";
     cout << left << setw(28) << "Gene start penalty" << right << setw(14) << gene_start_penalty << "\n";
     cout << left << setw(28) << "CNN donor scale" << right << setw(14) << donor_cnn_scale << "\n";
     cout << left << setw(28) << "CNN donor bias" << right << setw(14) << donor_cnn_bias << "\n";
