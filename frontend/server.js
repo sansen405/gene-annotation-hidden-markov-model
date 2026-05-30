@@ -43,11 +43,11 @@ async function ensurePredictorBuilt() {
     "src/tools/predict_fna.cpp",
     "src/decoding/Viterbi.cpp",
     "src/decoding/Forward_Backward.cpp",
-    "src/model/transition/Transition_Model.cpp",
+    "src/model/Transition_Model.cpp",
     "src/genome_profiles/Genome_Profile.cpp",
     "src/parsers/FNA_Parser.cpp",
     "src/parsers/GFF_Parser.cpp",
-    "src/model/emission/Emission_Model.cpp",
+    "src/model/Emission_Model.cpp",
   ].map((source) => path.join(repoRoot, source));
 
   if (fs.existsSync(predictorBin)) {
@@ -65,11 +65,11 @@ async function ensurePredictorBuilt() {
       "src/tools/predict_fna.cpp",
       "src/decoding/Viterbi.cpp",
       "src/decoding/Forward_Backward.cpp",
-      "src/model/transition/Transition_Model.cpp",
+      "src/model/Transition_Model.cpp",
       "src/genome_profiles/Genome_Profile.cpp",
       "src/parsers/FNA_Parser.cpp",
       "src/parsers/GFF_Parser.cpp",
-      "src/model/emission/Emission_Model.cpp",
+      "src/model/Emission_Model.cpp",
       "-o",
       predictorBin,
     ],
@@ -205,7 +205,7 @@ app.post("/api/predict", upload.single("file"), async (req, res) => {
         "--fna",
         req.file.path,
         "--profile",
-        path.join(repoRoot, "src/genome_profiles/fission_yeasts.json"),
+        path.join(repoRoot, "src/genome_profiles/yeast.json"),
       ],
       { cwd: repoRoot }
     );

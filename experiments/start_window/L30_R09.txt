@@ -1,0 +1,115 @@
+Gene start penalty: 1.0000
+Start PSSM window: left=30 right=9 (total 39 bp)
+CNN donor scale/bias: 1.0000/0.0000  acceptor scale/bias: 1.0000/0.0000
+Match window: +/-300 bp
+
+=== Start-offset diagnostic: s_pombe ===
+Predicted gene starts                           1186
+Gold gene starts                                1123
+Exact (offset 0)                                 965
+Shifted, within +/-300 bp                         91
+Spurious (no gold within window)                 130
+Missed gold (no pred within window)               72
+
+Shifted: predicted upstream of gold               23
+Shifted: predicted downstream of gold             68
+Shifted: in-frame (|off| % 3 == 0)                67
+Shifted: out-of-frame                             24
+Shifted: median |offset| (bp)                     81
+
+|offset| histogram (shifted-but-matched predicted starts):
+  1-2 bp                   0
+  3 bp                     9
+  4-9 bp                   2
+  10-30 bp                12
+  31-100 bp               30
+  101-300 bp              38
+
+=== Start-offset diagnostic: s_japonicus ===
+Predicted gene starts                           1336
+Gold gene starts                                 930
+Exact (offset 0)                                 815
+Shifted, within +/-300 bp                        113
+Spurious (no gold within window)                 408
+Missed gold (no pred within window)               31
+
+Shifted: predicted upstream of gold               56
+Shifted: predicted downstream of gold             57
+Shifted: in-frame (|off| % 3 == 0)                66
+Shifted: out-of-frame                             47
+Shifted: median |offset| (bp)                    156
+
+|offset| histogram (shifted-but-matched predicted starts):
+  1-2 bp                   0
+  3 bp                     1
+  4-9 bp                   2
+  10-30 bp                 6
+  31-100 bp               24
+  101-300 bp              80
+
+=== Start-offset diagnostic: s_octosporus ===
+Predicted gene starts                           1141
+Gold gene starts                                 996
+Exact (offset 0)                                 861
+Shifted, within +/-300 bp                        105
+Spurious (no gold within window)                 175
+Missed gold (no pred within window)               39
+
+Shifted: predicted upstream of gold               25
+Shifted: predicted downstream of gold             80
+Shifted: in-frame (|off| % 3 == 0)                75
+Shifted: out-of-frame                             30
+Shifted: median |offset| (bp)                     69
+
+|offset| histogram (shifted-but-matched predicted starts):
+  1-2 bp                   0
+  3 bp                     6
+  4-9 bp                  10
+  10-30 bp                17
+  31-100 bp               34
+  101-300 bp              38
+
+=== Start-offset diagnostic: s_cryophilus ===
+Predicted gene starts                            709
+Gold gene starts                                 645
+Exact (offset 0)                                 540
+Shifted, within +/-300 bp                         82
+Spurious (no gold within window)                  87
+Missed gold (no pred within window)               35
+
+Shifted: predicted upstream of gold               23
+Shifted: predicted downstream of gold             59
+Shifted: in-frame (|off| % 3 == 0)                54
+Shifted: out-of-frame                             28
+Shifted: median |offset| (bp)                    146
+
+|offset| histogram (shifted-but-matched predicted starts):
+  1-2 bp                   0
+  3 bp                     2
+  4-9 bp                   1
+  10-30 bp                11
+  31-100 bp               18
+  101-300 bp              50
+
+=== Start-offset diagnostic: combined ===
+Predicted gene starts                           4372
+Gold gene starts                                3694
+Exact (offset 0)                                3181
+Shifted, within +/-300 bp                        391
+Spurious (no gold within window)                 800
+Missed gold (no pred within window)              177
+
+Shifted: predicted upstream of gold              127
+Shifted: predicted downstream of gold            264
+Shifted: in-frame (|off| % 3 == 0)               262
+Shifted: out-of-frame                            129
+Shifted: median |offset| (bp)                    111
+
+|offset| histogram (shifted-but-matched predicted starts):
+  1-2 bp                   0
+  3 bp                    18
+  4-9 bp                  15
+  10-30 bp                46
+  31-100 bp              106
+  101-300 bp             206
+

@@ -1,0 +1,25 @@
+=== Test: s_octosporus:KE503206.1 ===
+Metric                               Value
+Evaluated bases                    3113840
+Exact 21-state accuracy             0.9783
+Illegal transitions                      0
+Predicted gene intervals              1073
+Gold gene intervals                    996
+Intron length cap p95                  196
+Gene start penalty                  2.0000
+CNN donor scale                     1.0000
+CNN donor bias                      0.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   0.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9809      0.9848      0.9828      0.9849   1343031     26136     20763   1723910
+intron            0.9511      0.7280      0.8247      0.9914     63050      3240     23555   3023995
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.7912      0.8524         849        1073         996
+stop              0.8863      0.9548         951        1073         996
+donor             0.9366      0.8311         945        1009        1137
+acceptor          0.9386      0.8329         947        1009        1137

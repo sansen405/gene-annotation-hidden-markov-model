@@ -1,0 +1,25 @@
+=== Full Genome Holdout Validation (all tests combined) ===
+Metric                               Value
+Evaluated bases                   11746239
+Exact 21-state accuracy             0.9697
+Illegal transitions                      0
+Predicted gene intervals              3853
+Gold gene intervals                   3694
+Intron length cap p95                  196
+Gene start penalty                  4.0000
+CNN donor scale                     1.0000
+CNN donor bias                      0.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   0.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9671      0.9804      0.9737      0.9765   5108531    173719    102181   6361808
+intron            0.9293      0.7175      0.8097      0.9913    217656     16568     85710  11426305
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.8022      0.8368        3091        3853        3694
+stop              0.8842      0.9223        3407        3853        3694
+donor             0.9154      0.7959        3128        3417        3930
+acceptor          0.9207      0.8005        3146        3417        3930

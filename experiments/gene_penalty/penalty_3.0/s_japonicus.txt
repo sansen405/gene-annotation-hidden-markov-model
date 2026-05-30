@@ -1,0 +1,25 @@
+=== Test: s_japonicus:KE651166.1 ===
+Metric                               Value
+Evaluated bases                    2950705
+Exact 21-state accuracy             0.9439
+Illegal transitions                      0
+Predicted gene intervals              1167
+Gold gene intervals                    930
+Intron length cap p95                  196
+Gene start penalty                  3.0000
+CNN donor scale                     1.0000
+CNN donor bias                      0.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   0.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9145      0.9877      0.9497      0.9513   1357613    126913     16903   1449276
+intron            0.8858      0.6960      0.7795      0.9897     53654      6914     23439   2866698
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.6787      0.8516         792        1167         930
+stop              0.7344      0.9215         857        1167         930
+donor             0.8610      0.7405         762         885        1029
+acceptor          0.8757      0.7532         775         885        1029

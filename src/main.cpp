@@ -23,10 +23,8 @@ int main(int argc, char** argv) {
         train_fasta_path = gene_hmm::profile.species.front().train_fasta_path;
         train_gff_path = gene_hmm::profile.species.front().train_gff_path;
     }
-    gene_hmm::run_GFF_Parser_tests(
-        train_fasta_path,
-        train_gff_path
-    );
+
+    gene_hmm::run_GFF_Parser_tests(train_fasta_path, train_gff_path);
 
     gene_hmm::run_Transition_Model_tests();
 

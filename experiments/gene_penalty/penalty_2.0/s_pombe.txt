@@ -1,0 +1,25 @@
+=== Test: s_pombe:NC_003424.3 ===
+Metric                               Value
+Evaluated bases                    3738342
+Exact 21-state accuracy             0.9775
+Illegal transitions                      0
+Predicted gene intervals              1135
+Gold gene intervals                   1123
+Intron length cap p95                  196
+Gene start penalty                  2.0000
+CNN donor scale                     1.0000
+CNN donor bias                      0.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   0.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9848      0.9754      0.9801      0.9836   1513612     23366     38114   2163250
+intron            0.9574      0.7360      0.8322      0.9930     64880      2889     23278   3647295
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.8344      0.8433         947        1135        1123
+stop              0.9207      0.9305        1045        1135        1123
+donor             0.9370      0.8229         878         937        1067
+acceptor          0.9402      0.8257         881         937        1067

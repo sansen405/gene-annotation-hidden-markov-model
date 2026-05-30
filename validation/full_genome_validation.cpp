@@ -6,6 +6,8 @@
 #include "../src/parsers/GFF_Parser.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -30,6 +32,9 @@ Log_Prob acceptor_cnn_bias = 0.0;
 bool tune_cnn_calibration = false;
 bool tune_only = false;
 size_t tune_subset_ranges = 64;
+bool collect_start_positions = false;
+string start_offset_report_path;
+const long START_MATCH_WINDOW = 300;
 
 struct Binary_Metrics {
     size_t tp = 0;
@@ -64,6 +69,13 @@ struct Validation_Result {
     size_t acceptor_exact = 0;
     vector<Interval> predicted_gene_intervals;
     vector<Interval> gold_gene_intervals;
+    // Start-boundary offset diagnostic (populated when collect_start_positions
+    // is set). Offsets are signed (predicted - nearest gold) within the same
+    // usable interval, in base pairs.
+    vector<long> pred_start_signed_offset; // one per predicted start that had >=1 gold start in its interval
+    vector<long> gold_start_nearest_dist;  // one per gold start that had >=1 predicted start in its interval
+    size_t pred_starts_no_gold = 0;        // predicted starts in an interval with no gold start
+    size_t gold_starts_no_pred = 0;        // gold starts in an interval with no predicted start
 };
 
 struct Sequence_Data {
@@ -687,6 +699,10 @@ void print_usage(const string& program_name) {
     cerr << "  --tune-cnn-calibration   Grid-search CNN calibration on the evaluation labels\n";
     cerr << "  --tune-only              Stop after selecting CNN calibration\n";
     cerr << "  --tune-subset-ranges N   Usable evaluation intervals for tuning, default 64\n";
+    cerr << "  --gene-start-penalty VALUE  Log-prob penalty on INTERGENIC -> START_CODON_1, default 1.0\n";
+    cerr << "  --start-offset-report PATH  Write a start-boundary offset diagnostic (per-species + combined) to PATH\n";
+    cerr << "  --start-window-left N    Start-codon PSSM bases upstream of the ATG (retrains the PSSM), default 6\n";
+    cerr << "  --start-window-right N   Start-codon PSSM bases from the ATG onward (>=3 covers ATG), default 9\n";
     cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
     cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n\n";
     cerr << "Example:\n";
@@ -759,6 +775,14 @@ Genome_Profile parse_args(int argc, char** argv) {
             acceptor_bias_set = true;
         } else if (arg == "--tune-subset-ranges") {
             tune_subset_ranges = stoull(value);
+        } else if (arg == "--gene-start-penalty") {
+            gene_start_penalty = stod(value);
+        } else if (arg == "--start-offset-report") {
+            start_offset_report_path = value;
+        } else if (arg == "--start-window-left") {
+            profile.emissions["START_CODON"].window_left = stoull(value);
+        } else if (arg == "--start-window-right") {
+            profile.emissions["START_CODON"].window_right = stoull(value);
         } else if (arg == "--transition-alpha") {
             profile.transition_alpha = stod(value);
         } else if (arg == "--emission-alpha") {
@@ -799,6 +823,141 @@ Genome_Profile parse_args(int argc, char** argv) {
     return profile;
 }
 
+// Positions (interval-local) of every START_CODON_1 in a decoded path.
+vector<size_t> start_codon_positions(const vector<State>& states) {
+    vector<size_t> positions;
+    for (size_t i = 0; i < states.size(); ++i) {
+        if (states[i] == State::START_CODON_1) positions.push_back(i);
+    }
+    return positions;
+}
+
+// For one usable interval, record how far each predicted gene start sits from
+// the nearest gold gene start (and vice versa). Predicted starts in an interval
+// with no gold start (or gold with no prediction) are counted separately as
+// spurious / missed rather than producing a misleading nearest distance.
+void accumulate_start_offsets(
+    const vector<State>& predicted,
+    const vector<State>& gold,
+    Validation_Result& result)
+{
+    vector<size_t> pred = start_codon_positions(predicted);
+    vector<size_t> gold_starts = start_codon_positions(gold);
+
+    for (size_t p : pred) {
+        if (gold_starts.empty()) {
+            result.pred_starts_no_gold++;
+            continue;
+        }
+        auto it = lower_bound(gold_starts.begin(), gold_starts.end(), p);
+        long best = numeric_limits<long>::max();
+        long signed_best = 0;
+        if (it != gold_starts.end()) {
+            long d = static_cast<long>(*it) - static_cast<long>(p);
+            if (labs(d) < best) { best = labs(d); signed_best = -d; }
+        }
+        if (it != gold_starts.begin()) {
+            long d = static_cast<long>(*(it - 1)) - static_cast<long>(p);
+            if (labs(d) < best) { best = labs(d); signed_best = -d; }
+        }
+        result.pred_start_signed_offset.push_back(signed_best);
+    }
+
+    for (size_t g : gold_starts) {
+        if (pred.empty()) {
+            result.gold_starts_no_pred++;
+            continue;
+        }
+        auto it = lower_bound(pred.begin(), pred.end(), g);
+        long best = numeric_limits<long>::max();
+        if (it != pred.end()) best = min(best, labs(static_cast<long>(*it) - static_cast<long>(g)));
+        if (it != pred.begin()) best = min(best, labs(static_cast<long>(*(it - 1)) - static_cast<long>(g)));
+        result.gold_start_nearest_dist.push_back(best);
+    }
+}
+
+void merge_start_offsets(Validation_Result& into, const Validation_Result& from) {
+    into.pred_start_signed_offset.insert(
+        into.pred_start_signed_offset.end(),
+        from.pred_start_signed_offset.begin(),
+        from.pred_start_signed_offset.end());
+    into.gold_start_nearest_dist.insert(
+        into.gold_start_nearest_dist.end(),
+        from.gold_start_nearest_dist.begin(),
+        from.gold_start_nearest_dist.end());
+    into.pred_starts_no_gold += from.pred_starts_no_gold;
+    into.gold_starts_no_pred += from.gold_starts_no_pred;
+}
+
+void write_start_offset_report(ostream& out, const string& title, const Validation_Result& result) {
+    const long W = START_MATCH_WINDOW;
+
+    size_t pred_total = result.pred_start_signed_offset.size() + result.pred_starts_no_gold;
+    size_t gold_total = result.gold_start_nearest_dist.size() + result.gold_starts_no_pred;
+
+    size_t exact = 0;          // offset == 0
+    size_t within_window = 0;  // 0 < |offset| <= W  (shifted but same gene)
+    size_t spurious = result.pred_starts_no_gold; // no gold in interval
+    size_t upstream = 0;       // predicted start before gold (offset < 0)
+    size_t downstream = 0;     // predicted start after gold (offset > 0)
+    size_t in_frame = 0;       // nonzero offset divisible by 3, within window
+    size_t out_frame = 0;      // nonzero offset not divisible by 3, within window
+
+    // |offset| buckets for shifted-but-matched predicted starts
+    size_t b_1_2 = 0, b_3 = 0, b_4_9 = 0, b_10_30 = 0, b_31_100 = 0, b_101_W = 0;
+    vector<long> matched_abs; // for median
+
+    for (long off : result.pred_start_signed_offset) {
+        long a = labs(off);
+        if (off == 0) { exact++; continue; }
+        if (a > W) { spurious++; continue; }
+        within_window++;
+        if (off < 0) upstream++; else downstream++;
+        if (off % 3 == 0) in_frame++; else out_frame++;
+        matched_abs.push_back(a);
+        if (a <= 2) b_1_2++;
+        else if (a == 3) b_3++;
+        else if (a <= 9) b_4_9++;
+        else if (a <= 30) b_10_30++;
+        else if (a <= 100) b_31_100++;
+        else b_101_W++;
+    }
+
+    size_t missed = result.gold_starts_no_pred;
+    for (long d : result.gold_start_nearest_dist) {
+        if (d > W) missed++;
+    }
+
+    long median_abs = 0;
+    if (!matched_abs.empty()) {
+        sort(matched_abs.begin(), matched_abs.end());
+        median_abs = matched_abs[matched_abs.size() / 2];
+    }
+
+    out << "=== Start-offset diagnostic: " << title << " ===\n";
+    out << left << setw(40) << "Predicted gene starts" << right << setw(12) << pred_total << "\n";
+    out << left << setw(40) << "Gold gene starts" << right << setw(12) << gold_total << "\n";
+    out << left << setw(40) << "Exact (offset 0)" << right << setw(12) << exact << "\n";
+    out << left << setw(40) << "Shifted, within +/-" + to_string(W) + " bp" << right << setw(12) << within_window << "\n";
+    out << left << setw(40) << "Spurious (no gold within window)" << right << setw(12) << spurious << "\n";
+    out << left << setw(40) << "Missed gold (no pred within window)" << right << setw(12) << missed << "\n";
+    out << "\n";
+    out << left << setw(40) << "Shifted: predicted upstream of gold" << right << setw(12) << upstream << "\n";
+    out << left << setw(40) << "Shifted: predicted downstream of gold" << right << setw(12) << downstream << "\n";
+    out << left << setw(40) << "Shifted: in-frame (|off| % 3 == 0)" << right << setw(12) << in_frame << "\n";
+    out << left << setw(40) << "Shifted: out-of-frame" << right << setw(12) << out_frame << "\n";
+    out << left << setw(40) << "Shifted: median |offset| (bp)" << right << setw(12) << median_abs << "\n";
+    out << "\n";
+    out << "|offset| histogram (shifted-but-matched predicted starts):\n";
+    out << left << setw(16) << "  1-2 bp" << right << setw(12) << b_1_2 << "\n";
+    out << left << setw(16) << "  3 bp" << right << setw(12) << b_3 << "\n";
+    out << left << setw(16) << "  4-9 bp" << right << setw(12) << b_4_9 << "\n";
+    out << left << setw(16) << "  10-30 bp" << right << setw(12) << b_10_30 << "\n";
+    out << left << setw(16) << "  31-100 bp" << right << setw(12) << b_31_100 << "\n";
+    out << left << setw(16) << "  101-" + to_string(W) + " bp" << right << setw(12) << b_101_W << "\n";
+    out << "\n";
+}
+
 Validation_Result decode_validation(
     Emission_Model& emission_model,
     const Transition_Model::Log_Prob_Matrix& transition_log_probs,
@@ -829,6 +988,10 @@ Validation_Result decode_validation(
 
         if (chromosome_predicted.size() != chromosome_gold.size()) {
             throw runtime_error("Decoded path length mismatch on " + range.name + ".");
+        }
+
+        if (collect_start_positions) {
+            accumulate_start_offsets(chromosome_predicted, chromosome_gold, result);
         }
 
         add_metrics(result.coding_total, binary_metrics(chromosome_predicted, chromosome_gold, is_coding));
@@ -1080,6 +1243,55 @@ int main(int argc, char** argv) {
         if (tune_only) {
             return 0;
         }
+    }
+
+    if (!start_offset_report_path.empty()) {
+        collect_start_positions = true;
+        ofstream report(start_offset_report_path);
+        if (!report) {
+            cerr << "Could not open start-offset report path: " << start_offset_report_path << "\n";
+            return 1;
+        }
+        report << "Gene start penalty: " << fixed << setprecision(4) << gene_start_penalty << "\n";
+        report << "Start PSSM window: left=" << emission_model.start_window_left
+               << " right=" << emission_model.start_window_right
+               << " (total " << (emission_model.start_window_left + emission_model.start_window_right) << " bp)\n";
+        report << "CNN donor scale/bias: " << donor_cnn_scale << "/" << donor_cnn_bias
+               << "  acceptor scale/bias: " << acceptor_cnn_scale << "/" << acceptor_cnn_bias << "\n";
+        report << "Match window: +/-" << START_MATCH_WINDOW << " bp\n\n";
+
+        Validation_Result combined;
+        for (const auto& dataset : gene_hmm::profile.species) {
+            vector<Chromosome_Range> species_ranges;
+            for (const auto& range : eval_ranges) {
+                if (range.name.rfind(dataset.name + ":", 0) == 0) {
+                    species_ranges.push_back(range);
+                }
+            }
+            if (species_ranges.empty()) {
+                continue;
+            }
+            Validation_Result species_result;
+            try {
+                species_result = decode_validation(
+                    emission_model,
+                    transition_log_probs,
+                    eval_data,
+                    species_ranges,
+                    max_intron_body_length,
+                    false);
+            } catch (const exception& e) {
+                cerr << e.what() << "\n";
+                return 1;
+            }
+            write_start_offset_report(report, dataset.name, species_result);
+            write_start_offset_report(cout, dataset.name, species_result);
+            merge_start_offsets(combined, species_result);
+        }
+        write_start_offset_report(report, "combined", combined);
+        write_start_offset_report(cout, "combined", combined);
+        cout << "Saved start-offset report to " << start_offset_report_path << "\n";
+        return 0;
     }
 
     cout << "\nDecoding usable evaluation intervals";

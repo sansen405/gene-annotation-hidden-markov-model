@@ -165,10 +165,7 @@ set<string> test_chromosomes_from_dataset(const Species_Dataset& dataset) {
 
 int main(int argc, char** argv) {
     try {
-        if (argc < 2) {
-            throw runtime_error("Usage: split_genome_data PROFILE_JSON");
-        }
-        string profile_path = argv[1];
+        string profile_path = argc > 1 ? argv[1] : "src/genome_profiles/yeast.json";
         Genome_Profile profile = Genome_Profile::load(profile_path);
 
         if (profile.species.empty()) {
