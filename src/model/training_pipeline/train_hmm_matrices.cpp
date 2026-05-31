@@ -114,13 +114,6 @@ Emission_Model train_emissions(
             train_ranges,
             {State::INTRON_1, State::INTRON_2, State::INTRON_3}));
 
-    model.exon_lp = Emission_Model::compute_markov5_log_probs(
-        Emission_Model::count_markov5_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            {State::EXON_FRAME_1, State::EXON_FRAME_2, State::EXON_FRAME_3}));
-
     model.exon_frame_lp[0] = Emission_Model::compute_markov5_log_probs(
         Emission_Model::count_markov5_emissions(
             states,
@@ -140,24 +133,6 @@ Emission_Model train_emissions(
             train_ranges,
             {State::EXON_FRAME_3}));
 
-    auto start_targets = vector<State>{State::START_CODON_1};
-    model.start_codon_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right,
-            Splice_Signal::START_CODON));
-
     return model;
 }
 
@@ -170,18 +145,6 @@ json serialize_log_prob(Log_Prob value) {
 
 template <typename Matrix>
 json serialize_matrix(const Matrix& matrix) {
-    json rows = json::array();
-    for (const auto& row : matrix) {
-        json out_row = json::array();
-        for (Log_Prob value : row) {
-            out_row.push_back(serialize_log_prob(value));
-        }
-        rows.push_back(out_row);
-    }
-    return rows;
-}
-
-json serialize_pssm(const Emission_Model::PSSM_Log_Prob& matrix) {
     json rows = json::array();
     for (const auto& row : matrix) {
         json out_row = json::array();
@@ -231,7 +194,7 @@ void print_usage(const string& program_name) {
          << "  --out-dir src/model/training_pipeline/trained_models/<profile-name>\n";
 }
 
-} // namespace
+}
 
 namespace gene_hmm {
     extern Genome_Profile profile;
@@ -289,21 +252,9 @@ int main(int argc, char** argv) {
                 {"intron", serialize_matrix(emission_model.intron_lp)}
             }},
             {"markov5", {
-                {"exon_combined", serialize_matrix(emission_model.exon_lp)},
                 {"exon_frame_1", serialize_matrix(emission_model.exon_frame_lp[0])},
                 {"exon_frame_2", serialize_matrix(emission_model.exon_frame_lp[1])},
                 {"exon_frame_3", serialize_matrix(emission_model.exon_frame_lp[2])}
-            }},
-            {"pssm", {
-                {"start_codon", serialize_pssm(emission_model.start_codon_lp)}
-            }},
-            {"windows", {
-                {"start_left", emission_model.start_window_left},
-                {"start_right", emission_model.start_window_right},
-                {"donor_left", emission_model.donor_window_left},
-                {"donor_right", emission_model.donor_window_right},
-                {"acceptor_left", emission_model.acceptor_window_left},
-                {"acceptor_right", emission_model.acceptor_window_right}
             }}
         };
 

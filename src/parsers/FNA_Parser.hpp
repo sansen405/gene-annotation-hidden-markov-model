@@ -22,8 +22,6 @@ namespace gene_hmm {
             static unordered_map<string, size_t> get_chromosome_offsets(const string& fasta_path);
             static vector<Chromosome_Range> get_chromosome_ranges(const string& fasta_path);
 
-            // Reverse complement of a nucleotide sequence. Because the Nucleotide
-            // enum is A=1, C=2, G=3, T=4, the Watson-Crick complement is 5 - value.
             static vector<Nucleotide> reverse_complement(const vector<Nucleotide>& nucleotides);
     };
 

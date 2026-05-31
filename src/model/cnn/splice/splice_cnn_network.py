@@ -5,26 +5,12 @@ from torch import nn
 
 
 class SpliceCNN(nn.Module):
-    """1D CNN for splice-site scoring with separate donor and acceptor backbones.
-
-    Each head crops an asymmetric window around the candidate dinucleotide at the
-    window center: the donor head looks mostly downstream of the GT (5' consensus),
-    the acceptor head looks far upstream of the AG (branch point + polypyrimidine
-    tract). Each backbone runs dilated convs (receptive field ~39 bp) and pools to
-    a few positional bins instead of one global value, so the head keeps coarse
-    information about where motifs sit relative to the splice site.
-    Output shape: (batch, 2) — column 0 donor, column 1 acceptor.
-    """
-
     POOL_BINS = 8
 
     def __init__(self, window_size: int = 121, hidden_channels: int = 128) -> None:
         super().__init__()
         self.window_size = window_size
         center = window_size // 2
-        # Asymmetric crops around the candidate dinucleotide at `center`.
-        # Donor: a little upstream, more downstream (5' splice consensus).
-        # Acceptor: far upstream (branch point ~-20..-50, polypyrimidine tract).
         self.donor_slice = (max(0, center - 10), min(window_size, center + 21))
         self.acceptor_slice = (max(0, center - 50), min(window_size, center + 11))
 
@@ -37,9 +23,6 @@ class SpliceCNN(nn.Module):
                 nn.Conv1d(hidden_channels, hidden_channels, kernel_size=5, padding=2),
                 nn.BatchNorm1d(hidden_channels),
                 nn.ReLU(),
-                # Stacked dilated convolutions grow receptive field exponentially:
-                # d=2: RF=15bp, d=4: RF=23bp, d=8: RF=39bp — captures polypyrimidine
-                # tract and partial branch-point context without extra parameters.
                 nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=2, dilation=2),
                 nn.BatchNorm1d(hidden_channels),
                 nn.ReLU(),
@@ -49,8 +32,6 @@ class SpliceCNN(nn.Module):
                 nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=8, dilation=8),
                 nn.BatchNorm1d(hidden_channels),
                 nn.ReLU(),
-                # Pool to a few positional bins (not a single global value) so the
-                # head retains where the motif sits relative to the dinucleotide.
                 nn.AdaptiveMaxPool1d(SpliceCNN.POOL_BINS),
             )
 

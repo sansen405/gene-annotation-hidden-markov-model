@@ -52,8 +52,8 @@ struct Binary_Metrics {
 
 struct Interval {
     string chromosome;
-    size_t start = 0; // 0-based, chromosome-local, inclusive
-    size_t end = 0;   // 0-based, chromosome-local, exclusive
+    size_t start = 0;
+    size_t end = 0;
 };
 
 struct Validation_Result {
@@ -76,13 +76,10 @@ struct Validation_Result {
     size_t acceptor_exact = 0;
     vector<Interval> predicted_gene_intervals;
     vector<Interval> gold_gene_intervals;
-    // Start-boundary offset diagnostic (populated when collect_start_positions
-    // is set). Offsets are signed (predicted - nearest gold) within the same
-    // usable interval, in base pairs.
-    vector<long> pred_start_signed_offset; // one per predicted start that had >=1 gold start in its interval
-    vector<long> gold_start_nearest_dist;  // one per gold start that had >=1 predicted start in its interval
-    size_t pred_starts_no_gold = 0;        // predicted starts in an interval with no gold start
-    size_t gold_starts_no_pred = 0;        // gold starts in an interval with no predicted start
+    vector<long> pred_start_signed_offset;
+    vector<long> gold_start_nearest_dist;
+    size_t pred_starts_no_gold = 0;
+    size_t gold_starts_no_pred = 0;
 };
 
 struct Sequence_Data {
@@ -152,10 +149,6 @@ double calibration_objective(const Validation_Result& result) {
         boundary_f1(result.acceptor_exact, result.acceptor_predicted, result.acceptor_gold)) / 3.0;
 }
 
-// Start calibration is fit against exact start-boundary F1 alone: it balances
-// recovering true starts (recall) against the over-opening that an untuned
-// start-CNN bias produces (precision), which is exactly the trade-off the
-// start_scale/start_bias knobs control.
 double start_calibration_objective(const Validation_Result& result) {
     return boundary_f1(result.start_exact, result.start_predicted, result.start_gold);
 }
@@ -276,12 +269,6 @@ Emission_Model train_emissions(
             train_ranges,
             {State::INTRON_1, State::INTRON_2, State::INTRON_3}));
 
-    model.exon_lp = Emission_Model::compute_markov5_log_probs(
-        Emission_Model::count_markov5_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            {State::EXON_FRAME_1, State::EXON_FRAME_2, State::EXON_FRAME_3}));
     model.exon_frame_lp[0] = Emission_Model::compute_markov5_log_probs(
         Emission_Model::count_markov5_emissions(
             states,
@@ -300,60 +287,6 @@ Emission_Model train_emissions(
             nucleotides,
             train_ranges,
             {State::EXON_FRAME_3}));
-
-    auto start_targets = vector<State>{State::START_CODON_1};
-    model.start_codon_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right,
-            Splice_Signal::START_CODON));
-
-    auto donor_targets = vector<State>{State::DONOR_1, State::DONOR_2, State::DONOR_3};
-    model.donor_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            donor_targets,
-            model.donor_window_left,
-            model.donor_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            donor_targets,
-            model.donor_window_left,
-            model.donor_window_right,
-            Splice_Signal::DONOR));
-
-    auto acceptor_targets = vector<State>{State::ACCEPTOR_1, State::ACCEPTOR_2, State::ACCEPTOR_3};
-    model.acceptor_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            acceptor_targets,
-            model.acceptor_window_left,
-            model.acceptor_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            acceptor_targets,
-            model.acceptor_window_left,
-            model.acceptor_window_right,
-            Splice_Signal::ACCEPTOR));
 
     return model;
 }
@@ -437,11 +370,6 @@ size_t percentile_length(vector<size_t> lengths, double percentile) {
     return lengths[index];
 }
 
-// Smoothed empirical histogram of training intron-body lengths over [1, max],
-// returned as log probabilities indexed by length. Add-1 smoothing keeps every
-// in-range length finite; the decoder caps the body length at `max`, so longer
-// lengths are unreachable. Replaces the implicit geometric duration with the
-// true (tightly peaked) intron length distribution.
 vector<Log_Prob> build_intron_length_log_probs(
     const vector<size_t>& lengths,
     size_t max_length)
@@ -625,11 +553,6 @@ Sequence_Data load_evaluation_data(const Genome_Profile& profile) {
     return combined;
 }
 
-// Minus-strand variant: the nucleotides are reverse-complemented per chromosome and
-// the gold states come from parse_regions(..., '-'), so each minus-strand gene reads
-// as a canonical forward gene. Coordinates stay within each chromosome's [start, end)
-// slot, so chromosome ranges and dataset offsets match the plus-strand pass exactly
-// (and therefore line up with the revcomp CNN score TSVs).
 void append_dataset_minus(
     Sequence_Data& combined,
     const string& name,
@@ -642,8 +565,6 @@ void append_dataset_minus(
     vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(fasta_path);
     vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(fasta_path);
 
-    // Reverse-complement each chromosome in place so the slice stays in the same
-    // [start, end) span but reads 5'->3' on the minus strand.
     for (const auto& chromosome : chromosomes) {
         vector<Nucleotide> slice(
             nucleotides.begin() + chromosome.start,
@@ -680,8 +601,6 @@ Sequence_Data load_evaluation_data_minus(const Genome_Profile& profile) {
     return combined;
 }
 
-// Sum two strand results into one combined report (all counts are strand-local and
-// additive; interval lists concatenate).
 Validation_Result merge_validation_results(const Validation_Result& a, const Validation_Result& b) {
     Validation_Result merged = a;
     add_metrics(merged.coding_total, b.coding_total);
@@ -949,7 +868,6 @@ Genome_Profile parse_args(int argc, char** argv) {
     return profile;
 }
 
-// Positions (interval-local) of every START_CODON_1 in a decoded path.
 vector<size_t> start_codon_positions(const vector<State>& states) {
     vector<size_t> positions;
     for (size_t i = 0; i < states.size(); ++i) {
@@ -958,10 +876,6 @@ vector<size_t> start_codon_positions(const vector<State>& states) {
     return positions;
 }
 
-// For one usable interval, record how far each predicted gene start sits from
-// the nearest gold gene start (and vice versa). Predicted starts in an interval
-// with no gold start (or gold with no prediction) are counted separately as
-// spurious / missed rather than producing a misleading nearest distance.
 void accumulate_start_offsets(
     const vector<State>& predicted,
     const vector<State>& gold,
@@ -1021,17 +935,16 @@ void write_start_offset_report(ostream& out, const string& title, const Validati
     size_t pred_total = result.pred_start_signed_offset.size() + result.pred_starts_no_gold;
     size_t gold_total = result.gold_start_nearest_dist.size() + result.gold_starts_no_pred;
 
-    size_t exact = 0;          // offset == 0
-    size_t within_window = 0;  // 0 < |offset| <= W  (shifted but same gene)
-    size_t spurious = result.pred_starts_no_gold; // no gold in interval
-    size_t upstream = 0;       // predicted start before gold (offset < 0)
-    size_t downstream = 0;     // predicted start after gold (offset > 0)
-    size_t in_frame = 0;       // nonzero offset divisible by 3, within window
-    size_t out_frame = 0;      // nonzero offset not divisible by 3, within window
+    size_t exact = 0;
+    size_t within_window = 0;
+    size_t spurious = result.pred_starts_no_gold;
+    size_t upstream = 0;
+    size_t downstream = 0;
+    size_t in_frame = 0;
+    size_t out_frame = 0;
 
-    // |offset| buckets for shifted-but-matched predicted starts
     size_t b_1_2 = 0, b_3 = 0, b_4_9 = 0, b_10_30 = 0, b_31_100 = 0, b_101_W = 0;
-    vector<long> matched_abs; // for median
+    vector<long> matched_abs;
 
     for (long off : result.pred_start_signed_offset) {
         long a = labs(off);
@@ -1199,10 +1112,6 @@ void tune_splice_cnn_calibration(
         {donor_cnn_scale, donor_cnn_bias, acceptor_cnn_scale, acceptor_cnn_bias}
     };
     const vector<Log_Prob> scales{0.35, 0.50, 0.75, 1.00, 1.25, 1.50};
-    // Donor/acceptor emissions compete directly against the exon/intron
-    // log-likelihoods, so the operating bias depends on where the raw CNN
-    // logits sit relative to those. Search a wide symmetric range so the
-    // optimum is never pinned to a grid edge.
     const vector<Log_Prob> donor_biases{-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0};
     const vector<Log_Prob> acceptor_biases{-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0};
     for (Log_Prob scale : scales) {
@@ -1291,9 +1200,6 @@ void tune_splice_cnn_calibration(
          << "\n";
 }
 
-// Fits start_scale/start_bias on the TRAINING split so the reported test
-// numbers are honest (no tuning on the evaluation genomes). The caller must
-// have loaded the start-CNN TRAIN scores onto emission_model before this runs.
 void tune_start_cnn_calibration(
     Emission_Model& emission_model,
     const Transition_Model::Log_Prob_Matrix& transition_log_probs,
@@ -1302,8 +1208,6 @@ void tune_start_cnn_calibration(
     size_t max_intron_body_length)
 {
     const vector<Log_Prob> scales{0.50, 0.75, 1.00, 1.25};
-    // The untuned start CNN over-opens genes, so the operating bias is expected
-    // to be negative (make starts costlier). Search a wide one-sided range.
     const vector<Log_Prob> biases{-6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0};
 
     const vector<Chromosome_Range> tuning_ranges =
@@ -1365,9 +1269,6 @@ void tune_start_cnn_calibration(
          << "\n";
 }
 
-// Writes the full metric/classification/boundary report for one decode result
-// to any stream, so the same layout serves stdout, the combined results file,
-// and the per-species results files.
 void write_validation_report(
     ostream& out,
     const string& header,
@@ -1404,7 +1305,7 @@ void write_validation_report(
     print_boundary_metrics_row(out, "acceptor", result.acceptor_exact, result.acceptor_predicted, result.acceptor_gold);
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     gene_hmm::profile = parse_args(argc, argv);
@@ -1470,7 +1371,6 @@ int main(int argc, char** argv) {
         acceptor_cnn_scale,
         acceptor_cnn_bias);
 
-    // Translation-start CNN scores are required, like splice donor/acceptor.
     if (!start_cnn_scores_path.empty()) {
         emission_model.load_start_cnn_scores(start_cnn_scores_path, eval_data.nucleotides.size());
     } else if (!gene_hmm::profile.start_cnn.test_score_paths.empty()) {
@@ -1493,9 +1393,6 @@ int main(int argc, char** argv) {
     intron_length_log_probs = build_intron_length_log_probs(train_intron_body_lengths, max_intron_body_length);
 
     if (tune_start_calibration) {
-        // Fit start_scale/start_bias on the TRAINING split (decoding train
-        // genomes), then restore the evaluation scores so the final report is
-        // measured on held-out genomes at the selected operating point.
         const auto& splice_train_paths = gene_hmm::profile.splice_cnn.train_score_paths;
         const auto& start_train_paths = gene_hmm::profile.start_cnn.train_score_paths;
         if (splice_train_paths.size() != train_data.dataset_offsets.size() ||
@@ -1516,7 +1413,6 @@ int main(int argc, char** argv) {
             train_ranges,
             max_intron_body_length);
 
-        // Restore evaluation scores exactly as they were originally loaded.
         if (!splice_cnn_scores_path.empty()) {
             emission_model.load_splice_cnn_scores(splice_cnn_scores_path, eval_data.nucleotides.size());
         } else {
@@ -1562,9 +1458,6 @@ int main(int argc, char** argv) {
             return 1;
         }
         report << "Gene start penalty: " << fixed << setprecision(4) << gene_start_penalty << "\n";
-        report << "Start PSSM window: left=" << emission_model.start_window_left
-               << " right=" << emission_model.start_window_right
-               << " (total " << (emission_model.start_window_left + emission_model.start_window_right) << " bp)\n";
         report << "CNN donor scale/bias: " << donor_cnn_scale << "/" << donor_cnn_bias
                << "  acceptor scale/bias: " << acceptor_cnn_scale << "/" << acceptor_cnn_bias << "\n";
         report << "Match window: +/-" << START_MATCH_WINDOW << " bp\n\n";
@@ -1624,10 +1517,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Optional minus-strand pass: decode each chromosome's reverse complement with a
-    // separate emission model (loaded with the revcomp CNN scores), then merge the
-    // strand-local metrics into the combined report. Requires include_minus_strand,
-    // profile-configured minus score files, and profile (not single-file) scores.
     auto all_paths_exist = [](const vector<string>& paths) {
         for (const auto& path : paths) {
             if (!filesystem::exists(path)) return false;
@@ -1708,7 +1597,6 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        // Combined report.
         const string combined_path = results_dir + "/combined.txt";
         ofstream combined_file(combined_path);
         if (!combined_file) {
@@ -1719,9 +1607,6 @@ int main(int argc, char** argv) {
             combined_file, "Full Genome Holdout Validation (all tests combined)", final_result, max_intron_body_length);
         cout << "\nSaved combined results to " << combined_path << "\n";
 
-        // Per-species reports: decode only that species' evaluation ranges. The
-        // CNN scores are already loaded with global offsets, so a range subset
-        // decodes identically to the combined run.
         for (const auto& dataset : gene_hmm::profile.species) {
             const string prefix = dataset.name + ":";
             vector<Chromosome_Range> species_ranges;

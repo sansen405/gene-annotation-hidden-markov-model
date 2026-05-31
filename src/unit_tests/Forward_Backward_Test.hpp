@@ -3,6 +3,7 @@
 #include "../decoding/Forward_Backward.hpp"
 #include "Test_Utils.hpp"
 #include <cmath>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,11 @@ namespace gene_hmm {
         cout << "\n[TEST 2] Forced intergenic path has confidence 1 at each base\n";
 
         Emission_Model model;
+        //donor emissions require loaded splice scores; an empty file gives neutral 0.0
+        const string splice_scores_path = "/tmp/gene_hmm_fb_test_splice_scores.tsv";
+        { ofstream empty_scores(splice_scores_path); }
+        model.load_splice_cnn_scores(splice_scores_path, 3);
+
         vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::G, Nucleotide::T};
         vector<State> path = {State::INTERGENIC, State::INTERGENIC, State::INTERGENIC};
         auto transitions = make_forward_backward_log_zero_matrix();

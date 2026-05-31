@@ -9,7 +9,7 @@
 namespace gene_hmm{
     using namespace std; 
 
-    //Need to include chromosome range because naively going from state[i] to state[i+1] will also count transitions between different chromosomes
+    //chromosome ranges prevent counting transitions across chromosome boundaries
     Transition_Model::Count_Matrix Transition_Model::count_bigrams(const vector<State> & state_sequence, const vector<Chromosome_Range>& chromosome_range){
         Count_Matrix bigram_count = {};
         for (const auto& chromosome: chromosome_range){

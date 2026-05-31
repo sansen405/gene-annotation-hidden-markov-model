@@ -71,14 +71,10 @@ namespace gene_hmm {
     }
 
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path, char strand) {
-        //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron, 3 -> Ignored annotation}
-
         size_t sequence_length = FNA_Parser::get_sequence_length(fna_path);
         auto chrom_offsets = FNA_Parser::get_chromosome_offsets(fna_path);
 
-        // Per-chromosome reverse-complement pivot K = first_global + last_global, so
-        // a forward global position p maps to revcomp global position K - p within
-        // the same chromosome (K = range.start + range.end - 1).
+        //pivot K maps a forward global position p to revcomp position K - p within the chromosome
         unordered_map<string, int> revcomp_pivot;
         for (const auto& range : FNA_Parser::get_chromosome_ranges(fna_path)) {
             revcomp_pivot[range.name] =
@@ -98,7 +94,6 @@ namespace gene_hmm {
 
         map<string, CDS_Group> gene_builder;
 
-        //Group CDS fragments by parent_id, namespaced by chromosome
         while (getline(file, curr_line)) {
             if (curr_line.empty() || curr_line[0] == '#') {
                 continue;
@@ -115,7 +110,6 @@ namespace gene_hmm {
                 continue;
             }
 
-            //Translate per-chromosome GFF coordinates into the global vector
             auto off_it = chrom_offsets.find(tokens[0]);
             if (off_it == chrom_offsets.end()) continue;
             int chrom_off = static_cast<int>(off_it->second);
@@ -123,9 +117,7 @@ namespace gene_hmm {
             int CDS_curr_start = stoi(tokens[3]) - 1 + chrom_off;
             int CDS_curr_end = stoi(tokens[4]) - 1 + chrom_off;
 
-            // In minus mode the whole region vector lives in reverse-complement
-            // coordinates, so every fragment (kept or ignored) is mirrored within its
-            // chromosome and start/end swap.
+            //in minus mode every fragment is mirrored within its chromosome and start/end swap
             if (strand == '-') {
                 int pivot = revcomp_pivot.at(tokens[0]);
                 int mirrored_start = pivot - CDS_curr_end;
@@ -146,9 +138,7 @@ namespace gene_hmm {
             if (!CDS_curr_parent_id.empty()) {
                 string key = tokens[0] + "|" + CDS_curr_parent_id;
                 gene_builder[key].fragments.push_back({CDS_curr_start, CDS_curr_end});
-                // Only transcripts on the requested strand are trainable/scorable;
-                // the opposite strand is marked unsupported so it is painted as
-                // ignored annotation rather than contributing signal.
+                //opposite-strand transcripts are marked unsupported so they are painted as ignored
                 string required_strand(1, strand);
                 if (tokens[6] != required_strand) {
                     gene_builder[key].supported = false;
@@ -183,7 +173,6 @@ namespace gene_hmm {
             }
         }
 
-        //CDS fragments as 1, gaps between fragments as 2 (intron)
         for (auto& [parent_id, group] : gene_builder) {
             if (!group.supported) {
                 continue;
@@ -210,11 +199,10 @@ namespace gene_hmm {
 
     vector<State> GFF_Parser::parse_states(vector<int> region_sequence) {
         vector<State> state_sequence(region_sequence.size(), State::INTERGENIC);
-        int frame_counter = 0; //Frame of the next exon base: 0 -> EXON_FRAME_1, 1 -> EXON_FRAME_2, 2 -> EXON_FRAME_3
+        int frame_counter = 0;
         int active_intron = 0;
         size_t index = 0;
         while(index < region_sequence.size()){
-            //Case 0: intergenic
             if(region_sequence[index] == GFF_Parser::INTERGENIC_REGION ||
                region_sequence[index] == GFF_Parser::IGNORED_REGION){
                 state_sequence[index] = State::INTERGENIC;
@@ -223,9 +211,7 @@ namespace gene_hmm {
                 continue;
             }
 
-            //Case 1: CDS
             if(region_sequence[index] == GFF_Parser::CDS_REGION){
-                //Case 1A: start codon (intergenic -> CDS boundary)
                 if(index == 0 || region_sequence[index-1] == GFF_Parser::INTERGENIC_REGION ||
                    region_sequence[index-1] == GFF_Parser::IGNORED_REGION){
                     if (index + 2 < region_sequence.size()
@@ -240,7 +226,6 @@ namespace gene_hmm {
                     }
                 }
 
-                //Case 1B: stop codon (CDS -> intergenic boundary, or end of sequence)
                 if(index + 2 < region_sequence.size()
                    && region_sequence[index+1] == GFF_Parser::CDS_REGION
                    && region_sequence[index+2] == GFF_Parser::CDS_REGION
@@ -255,7 +240,6 @@ namespace gene_hmm {
                     continue;
                 }
 
-                //Case 1C: standard exon reading frames
                 if(frame_counter == 0){
                     state_sequence[index] = State::EXON_FRAME_1;
                 }
@@ -271,12 +255,10 @@ namespace gene_hmm {
                 continue;
             }
 
-            //Case 2: intron
             if (region_sequence[index] == GFF_Parser::INTRON_REGION){
                 bool is_donor = (index == 0 || region_sequence[index-1] == GFF_Parser::CDS_REGION);
                 bool is_acceptor = (index + 1 < region_sequence.size() && region_sequence[index+1] == GFF_Parser::CDS_REGION);
 
-                //Case 2A: donor (CDS -> intron boundary)
                 if(is_donor){
                     if(frame_counter == 0){
                         state_sequence[index] = State::DONOR_1;
@@ -294,7 +276,6 @@ namespace gene_hmm {
                     continue;
                 }
 
-                //Case 2B: acceptor (intron -> CDS boundary)
                 if(is_acceptor){
                     if(active_intron == 1){
                         state_sequence[index] = State::ACCEPTOR_1;
@@ -309,7 +290,6 @@ namespace gene_hmm {
                     continue;
                 }
 
-                //Case 2C: intron body
                 if(active_intron == 1){
                     state_sequence[index] = State::INTRON_1;
                 }
@@ -324,7 +304,7 @@ namespace gene_hmm {
             }
         }
 
-        //CLEAN UP: turn all genes that have illegal transitions into all intergenic states
+        //reset any gene containing an illegal transition back to intergenic
         int most_recent_intergenic = -1;
         int num_illegal_transitions = 0;
         bool is_illegal_transition = false;
@@ -351,7 +331,6 @@ namespace gene_hmm {
             for(size_t i = most_recent_intergenic+1; i < state_sequence.size(); i++)
                 state_sequence[i] = State::INTERGENIC;
 
-        //return cleaned state sequence to be used in transition and emission model training
         return state_sequence;
     }
 }

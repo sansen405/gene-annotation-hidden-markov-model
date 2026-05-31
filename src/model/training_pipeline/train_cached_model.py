@@ -44,9 +44,6 @@ def compile_hmm_trainer(binary_path: Path, cxx: str) -> None:
     )
 
 
-# Each CNN signal maps to its trainer script. The trainers load an existing
-# checkpoint when one is present (skipping retraining) and only regenerate the
-# score TSVs, so selecting an already-trained model is a cheap score refresh.
 CNN_TRAINERS = {
     "splice": "src/model/cnn/splice/train_splice_cnn_scores.py",
     "start": "src/model/cnn/start/train_start_cnn_scores.py",
@@ -107,7 +104,6 @@ def main() -> None:
 
     log(f"starting cached model pipeline profile={profile_path}")
     if not args.skip_cnn:
-        # Preserve a stable order (splice before start) regardless of CLI order.
         selected = [cnn for cnn in sorted(CNN_TRAINERS) if cnn in set(args.cnn)]
         log(f"CNN models to refresh: {', '.join(selected)}")
         for cnn in selected:

@@ -39,14 +39,6 @@ class FastaDataset:
 
 @dataclass(frozen=True)
 class Calibration:
-    """Score-time transform that turns raw start logits into genomic-prior log-odds.
-
-    Mirrors the splice calibration: `temperature` fixes the scale and subtracting
-    the training-prior logit fixes the offset, so the written scores are
-    likelihood-ratio-style log-odds and the HMM can decode the start emission at
-    scale=1, bias=0.
-    """
-
     temperature: float
     start_prior_logit: float
 
@@ -121,15 +113,6 @@ def start_sites_from_gff(
     offsets: dict[str, int],
     require_3n_cds: bool,
 ) -> dict[int, str]:
-    """Return translation-start positions mapped to their transcript strand.
-
-    Both strands are kept. The start is the first coding base of the transcript:
-    the lowest-coordinate CDS base on the plus strand and the highest-coordinate
-    CDS base on the minus strand. Minus-strand sites are reported at their plus-
-    genome coordinate but tagged "-" so the caller can reverse-complement the
-    window and present every true start to the model in canonical 5'->3' (ATG)
-    orientation.
-    """
     cds_by_parent: dict[str, list[tuple[int, int]]] = defaultdict(list)
     strand_by_parent: dict[str, str] = {}
 
@@ -167,11 +150,8 @@ def start_sites_from_gff(
             continue
 
         if strand == "+":
-            # Plus strand: first coding base is the A of the ATG (low coord).
             starts[fragments[0][0]] = "+"
         else:
-            # Minus strand: first coding base is the high-coordinate end; the
-            # window is reverse-complemented later so it reads ATG canonically.
             starts[fragments[-1][1]] = "-"
 
     log(
@@ -249,8 +229,6 @@ def sample_training_examples(
         for pos in positive_sites_by_record[record.name]:
             local_pos = pos - record.offset
             window = window_at(record.sequence, local_pos, radius)
-            # Minus-strand starts are presented reverse-complemented so the model
-            # always sees a canonical ATG window, regardless of source strand.
             if starts.get(pos) == "-":
                 window = reverse_complement(window)
             windows.append(window)
@@ -271,15 +249,10 @@ def sample_training_examples(
 
 
 def bce_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    """Plain binary cross-entropy: a proper scoring rule, so the trained logits are
-    calibrated log-odds (the same choice the splice trainer uses)."""
     return nn.functional.binary_cross_entropy_with_logits(logits, targets)
 
 
 def fit_temperature(logits: torch.Tensor, labels: torch.Tensor) -> float:
-    """Temperature scaling: fit one scalar on held-out logits so predicted
-    probabilities match observed frequencies (automatic replacement for a
-    hand-tuned emission scale)."""
     log_temp = torch.zeros(1, requires_grad=True)
     optimizer = torch.optim.LBFGS([log_temp], lr=0.1, max_iter=50)
 
@@ -294,9 +267,6 @@ def fit_temperature(logits: torch.Tensor, labels: torch.Tensor) -> float:
 
 
 def average_precision(scores: torch.Tensor, targets: torch.Tensor) -> float:
-    """Area under the precision-recall curve for the start column. Threshold-free,
-    so it reflects start discrimination on the imbalanced ATG candidate set.
-    Returns NaN if no positives."""
     n_pos = float(targets.sum().item())
     if n_pos == 0:
         return float("nan")
@@ -308,9 +278,6 @@ def average_precision(scores: torch.Tensor, targets: torch.Tensor) -> float:
     return float((precision * sorted_targets).sum().item() / n_pos)
 
 
-# MPS conv1d rejects very large single-forward batches ("Output channels > 65536"),
-# so evaluation/calibration forwards run in mini-batches. The training loop already
-# batches via the DataLoader.
 EVAL_BATCH_SIZE = 4096
 
 
@@ -341,8 +308,6 @@ def train_model(
     batch_size: int,
     device: "torch.device",
 ) -> Calibration:
-    # Seeded shuffle before splitting so the held-out 10 % is representative
-    # (examples are concatenated positives-first, then per species).
     generator = torch.Generator().manual_seed(13)
     perm = torch.randperm(len(inputs), generator=generator)
     inputs = inputs[perm]
@@ -355,8 +320,6 @@ def train_model(
 
     loader = DataLoader(TensorDataset(train_inputs, train_labels), batch_size=batch_size, shuffle=True)
     model = model.to(device)
-    # Val tensors stay on CPU; evaluation runs in mini-batches (forward_in_batches)
-    # because MPS conv1d rejects a single forward over the full held-out set.
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
@@ -397,7 +360,6 @@ def train_model(
             f"lr={scheduler.get_last_lr()[0]:.2e} elapsed={time.perf_counter() - epoch_start:.1f}s"
         )
 
-    # Fit the score-time calibration so the HMM can decode at scale=1, bias=0.
     model.eval()
     final_val_logits = forward_in_batches(model, val_inputs, device)
 
@@ -431,8 +393,6 @@ def write_scores(
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Minus-strand scores are produced by scoring each record's reverse complement;
-    # positions stay record.offset + local (revcomp-local) to match the decoder.
     log(
         f"writing scores: input={dataset.path} output={output_path} "
         f"bases={format_count(dataset.base_count)} strand={'-' if reverse else '+'}"
@@ -472,8 +432,6 @@ def write_sparse_scores(
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # When reverse is set, ATG candidates are found on the reverse complement so the
-    # sparse minus-strand TSV covers start candidates in revcomp coordinates.
     sequences = [
         reverse_complement(record.sequence) if reverse else record.sequence
         for record in dataset.records
@@ -575,7 +533,6 @@ def apply_profile_defaults(args: argparse.Namespace) -> None:
         args.model_out = Path(model_path)
     args.train_scores_out = args.train_scores_out or list_from_json(start_cnn.get("train_scores"), "train_scores")
     args.test_scores_out = args.test_scores_out or list_from_json(start_cnn.get("test_scores"), "test_scores")
-    # Minus-strand score paths are optional; only generated when configured.
     if args.train_scores_minus_out is None and start_cnn.get("train_scores_minus") is not None:
         args.train_scores_minus_out = list_from_json(start_cnn.get("train_scores_minus"), "train_scores_minus")
     if args.test_scores_minus_out is None and start_cnn.get("test_scores_minus") is not None:
@@ -684,8 +641,6 @@ def main() -> None:
         calibration = train_model(model, inputs, labels, args.epochs, args.batch_size, device)
         args.model_out.parent.mkdir(parents=True, exist_ok=True)
         log(f"saving CNN checkpoint: {args.model_out}")
-        # Save on CPU so the checkpoint is device-agnostic; calibration travels
-        # with the weights so reloading reproduces identical scores.
         torch.save(
             {
                 "state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
@@ -703,14 +658,11 @@ def main() -> None:
         else:
             write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration, reverse)
 
-    # Scores are written as calibrated log-odds, so the HMM can decode the start
-    # emission at scale=1, bias=0 with no grid tuning.
     for dataset, score_path in zip(train_datasets, args.train_scores_out):
         emit(dataset, score_path, reverse=False)
     for dataset, score_path in zip(test_datasets, args.test_scores_out):
         emit(dataset, score_path, reverse=False)
 
-    # Minus-strand (reverse-complement) scores, when configured for dual-strand decode.
     if args.train_scores_minus_out:
         validate_output_counts("training minus", args.train_fasta, args.train_scores_minus_out)
         for dataset, score_path in zip(train_datasets, args.train_scores_minus_out):

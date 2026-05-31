@@ -1,0 +1,716 @@
+{
+    "name": "fungi_diverse",
+    "description": "Diverse pan-fungal benchmark: 24 RefSeq-annotated genomes spanning Saccharomycotina, Pezizomycotina, Basidiomycota, Mucoromycota and Chytridiomycota, chosen to span the intron-density gradient that stresses the splice/intron model.",
+    "dataset": {
+        "species": [
+            {
+                "name": "s_cerevisiae",
+                "source_fasta": "genome_data/fungi_diverse/s_cerevisiae/full/s_cerevisiae_full.fna",
+                "source_gff": "genome_data/fungi_diverse/s_cerevisiae/full/s_cerevisiae_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_train.fna",
+                "train_gff": "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_test.fna",
+                "test_gff": "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_test.gff",
+                "test_chromosomes": [
+                    "NC_001147.6",
+                    "NC_001136.10"
+                ],
+                "excluded_chromosomes": [
+                    "NC_001224.1"
+                ]
+            },
+            {
+                "name": "c_albicans",
+                "source_fasta": "genome_data/fungi_diverse/c_albicans/full/c_albicans_full.fna",
+                "source_gff": "genome_data/fungi_diverse/c_albicans/full/c_albicans_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/c_albicans/train/c_albicans_train.fna",
+                "train_gff": "genome_data/fungi_diverse/c_albicans/train/c_albicans_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/c_albicans/test/c_albicans_test.fna",
+                "test_gff": "genome_data/fungi_diverse/c_albicans/test/c_albicans_test.gff",
+                "test_chromosomes": [
+                    "NC_032094.1",
+                    "NC_032096.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "k_lactis",
+                "source_fasta": "genome_data/fungi_diverse/k_lactis/full/k_lactis_full.fna",
+                "source_gff": "genome_data/fungi_diverse/k_lactis/full/k_lactis_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/k_lactis/train/k_lactis_train.fna",
+                "train_gff": "genome_data/fungi_diverse/k_lactis/train/k_lactis_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/k_lactis/test/k_lactis_test.fna",
+                "test_gff": "genome_data/fungi_diverse/k_lactis/test/k_lactis_test.gff",
+                "test_chromosomes": [
+                    "NC_006041.1"
+                ],
+                "excluded_chromosomes": [
+                    "NC_006077.1"
+                ]
+            },
+            {
+                "name": "y_lipolytica",
+                "source_fasta": "genome_data/fungi_diverse/y_lipolytica/full/y_lipolytica_full.fna",
+                "source_gff": "genome_data/fungi_diverse/y_lipolytica/full/y_lipolytica_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_train.fna",
+                "train_gff": "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_test.fna",
+                "test_gff": "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_test.gff",
+                "test_chromosomes": [
+                    "NC_090774.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "d_hansenii",
+                "source_fasta": "genome_data/fungi_diverse/d_hansenii/full/d_hansenii_full.fna",
+                "source_gff": "genome_data/fungi_diverse/d_hansenii/full/d_hansenii_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_train.fna",
+                "train_gff": "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_test.fna",
+                "test_gff": "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_test.gff",
+                "test_chromosomes": [
+                    "NC_006044.2"
+                ],
+                "excluded_chromosomes": [
+                    "NC_010166.1"
+                ]
+            },
+            {
+                "name": "k_phaffii",
+                "source_fasta": "genome_data/fungi_diverse/k_phaffii/full/k_phaffii_full.fna",
+                "source_gff": "genome_data/fungi_diverse/k_phaffii/full/k_phaffii_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_train.fna",
+                "train_gff": "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_test.fna",
+                "test_gff": "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_test.gff",
+                "test_chromosomes": [
+                    "NC_012966.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "e_gossypii",
+                "source_fasta": "genome_data/fungi_diverse/e_gossypii/full/e_gossypii_full.fna",
+                "source_gff": "genome_data/fungi_diverse/e_gossypii/full/e_gossypii_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_train.fna",
+                "train_gff": "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_test.fna",
+                "test_gff": "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_test.gff",
+                "test_chromosomes": [
+                    "NC_005783.5",
+                    "NC_005784.3"
+                ],
+                "excluded_chromosomes": [
+                    "NC_005789.1"
+                ]
+            },
+            {
+                "name": "n_crassa",
+                "source_fasta": "genome_data/fungi_diverse/n_crassa/full/n_crassa_full.fna",
+                "source_gff": "genome_data/fungi_diverse/n_crassa/full/n_crassa_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/n_crassa/train/n_crassa_train.fna",
+                "train_gff": "genome_data/fungi_diverse/n_crassa/train/n_crassa_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/n_crassa/test/n_crassa_test.fna",
+                "test_gff": "genome_data/fungi_diverse/n_crassa/test/n_crassa_test.gff",
+                "test_chromosomes": [
+                    "NC_026507.1"
+                ],
+                "excluded_chromosomes": [
+                    "NC_026614.1"
+                ]
+            },
+            {
+                "name": "a_nidulans",
+                "source_fasta": "genome_data/fungi_diverse/a_nidulans/full/a_nidulans_full.fna",
+                "source_gff": "genome_data/fungi_diverse/a_nidulans/full/a_nidulans_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_train.fna",
+                "train_gff": "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_test.fna",
+                "test_gff": "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_test.gff",
+                "test_chromosomes": [
+                    "NC_066262.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "a_fumigatus",
+                "source_fasta": "genome_data/fungi_diverse/a_fumigatus/full/a_fumigatus_full.fna",
+                "source_gff": "genome_data/fungi_diverse/a_fumigatus/full/a_fumigatus_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_train.fna",
+                "train_gff": "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_test.fna",
+                "test_gff": "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_test.gff",
+                "test_chromosomes": [
+                    "NC_007199.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "f_graminearum",
+                "source_fasta": "genome_data/fungi_diverse/f_graminearum/full/f_graminearum_full.fna",
+                "source_gff": "genome_data/fungi_diverse/f_graminearum/full/f_graminearum_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_train.fna",
+                "train_gff": "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_test.fna",
+                "test_gff": "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_test.gff",
+                "test_chromosomes": [
+                    "NC_026477.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "p_oryzae",
+                "source_fasta": "genome_data/fungi_diverse/p_oryzae/full/p_oryzae_full.fna",
+                "source_gff": "genome_data/fungi_diverse/p_oryzae/full/p_oryzae_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_train.fna",
+                "train_gff": "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_test.fna",
+                "test_gff": "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_test.gff",
+                "test_chromosomes": [
+                    "NW_003803316.1",
+                    "NW_003803320.1",
+                    "NW_003803317.1",
+                    "NW_003803353.1",
+                    "NC_017854.1",
+                    "NW_003803359.1",
+                    "NC_017852.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "b_cinerea",
+                "source_fasta": "genome_data/fungi_diverse/b_cinerea/full/b_cinerea_full.fna",
+                "source_gff": "genome_data/fungi_diverse/b_cinerea/full/b_cinerea_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_train.fna",
+                "train_gff": "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_test.fna",
+                "test_gff": "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_test.gff",
+                "test_chromosomes": [
+                    "NC_037321.1",
+                    "NC_037319.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "s_sclerotiorum",
+                "source_fasta": "genome_data/fungi_diverse/s_sclerotiorum/full/s_sclerotiorum_full.fna",
+                "source_gff": "genome_data/fungi_diverse/s_sclerotiorum/full/s_sclerotiorum_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_train.fna",
+                "train_gff": "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_test.fna",
+                "test_gff": "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_test.gff",
+                "test_chromosomes": [
+                    "NW_001820835.1",
+                    "NW_001820821.1"
+                ],
+                "excluded_chromosomes": [
+                    "NC_035155.1"
+                ]
+            },
+            {
+                "name": "t_reesei",
+                "source_fasta": "genome_data/fungi_diverse/t_reesei/full/t_reesei_full.fna",
+                "source_gff": "genome_data/fungi_diverse/t_reesei/full/t_reesei_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/t_reesei/train/t_reesei_train.fna",
+                "train_gff": "genome_data/fungi_diverse/t_reesei/train/t_reesei_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/t_reesei/test/t_reesei_test.fna",
+                "test_gff": "genome_data/fungi_diverse/t_reesei/test/t_reesei_test.gff",
+                "test_chromosomes": [
+                    "NW_006711150.1",
+                    "NW_006711149.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "z_tritici",
+                "source_fasta": "genome_data/fungi_diverse/z_tritici/full/z_tritici_full.fna",
+                "source_gff": "genome_data/fungi_diverse/z_tritici/full/z_tritici_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/z_tritici/train/z_tritici_train.fna",
+                "train_gff": "genome_data/fungi_diverse/z_tritici/train/z_tritici_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/z_tritici/test/z_tritici_test.fna",
+                "test_gff": "genome_data/fungi_diverse/z_tritici/test/z_tritici_test.gff",
+                "test_chromosomes": [
+                    "NC_018206.1",
+                    "NC_018209.1",
+                    "NC_018200.1",
+                    "NC_018211.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "c_higginsianum",
+                "source_fasta": "genome_data/fungi_diverse/c_higginsianum/full/c_higginsianum_full.fna",
+                "source_gff": "genome_data/fungi_diverse/c_higginsianum/full/c_higginsianum_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_train.fna",
+                "train_gff": "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_test.fna",
+                "test_gff": "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_test.gff",
+                "test_chromosomes": [
+                    "NC_030961.1",
+                    "NC_030954.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "cr_neoformans",
+                "source_fasta": "genome_data/fungi_diverse/cr_neoformans/full/cr_neoformans_full.fna",
+                "source_gff": "genome_data/fungi_diverse/cr_neoformans/full/cr_neoformans_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_train.fna",
+                "train_gff": "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_test.fna",
+                "test_gff": "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_test.gff",
+                "test_chromosomes": [
+                    "NC_026748.1",
+                    "NC_026754.1"
+                ],
+                "excluded_chromosomes": [
+                    "NC_018792.1"
+                ]
+            },
+            {
+                "name": "u_maydis",
+                "source_fasta": "genome_data/fungi_diverse/u_maydis/full/u_maydis_full.fna",
+                "source_gff": "genome_data/fungi_diverse/u_maydis/full/u_maydis_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/u_maydis/train/u_maydis_train.fna",
+                "train_gff": "genome_data/fungi_diverse/u_maydis/train/u_maydis_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/u_maydis/test/u_maydis_test.fna",
+                "test_gff": "genome_data/fungi_diverse/u_maydis/test/u_maydis_test.gff",
+                "test_chromosomes": [
+                    "NC_026488.1",
+                    "NW_011929458.1",
+                    "NC_026482.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "co_cinerea",
+                "source_fasta": "genome_data/fungi_diverse/co_cinerea/full/co_cinerea_full.fna",
+                "source_gff": "genome_data/fungi_diverse/co_cinerea/full/co_cinerea_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_train.fna",
+                "train_gff": "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_test.fna",
+                "test_gff": "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_test.gff",
+                "test_chromosomes": [
+                    "NW_003307521.1",
+                    "NW_003307499.1",
+                    "NW_003307527.1",
+                    "NW_003307481.1",
+                    "NW_003307492.1",
+                    "NW_003307485.1",
+                    "NW_003307531.1",
+                    "NW_003307543.1"
+                ],
+                "excluded_chromosomes": [
+                    "NW_003307477.1"
+                ]
+            },
+            {
+                "name": "p_graminis",
+                "source_fasta": "genome_data/fungi_diverse/p_graminis/full/p_graminis_full.fna",
+                "source_gff": "genome_data/fungi_diverse/p_graminis/full/p_graminis_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/p_graminis/train/p_graminis_train.fna",
+                "train_gff": "genome_data/fungi_diverse/p_graminis/train/p_graminis_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/p_graminis/test/p_graminis_test.fna",
+                "test_gff": "genome_data/fungi_diverse/p_graminis/test/p_graminis_test.gff",
+                "test_chromosomes": [
+                    "NW_003526898.1",
+                    "NW_003526668.1",
+                    "NW_003526717.1",
+                    "NW_003526580.1",
+                    "NW_003526678.1",
+                    "NW_003526797.1",
+                    "NW_003526617.1",
+                    "NW_003526832.1",
+                    "NW_003526873.1",
+                    "NW_003526865.1",
+                    "NW_003526721.1",
+                    "NW_003526866.1",
+                    "NW_003526630.1",
+                    "NW_003526795.1",
+                    "NW_003526800.1",
+                    "NW_003526703.1",
+                    "NW_003526925.1",
+                    "NW_003526773.1",
+                    "NW_003526727.1",
+                    "NW_003526818.1",
+                    "NW_003526823.1",
+                    "NW_003526816.1",
+                    "NW_003526646.1",
+                    "NW_003526736.1",
+                    "NW_003526564.1",
+                    "NW_003526660.1",
+                    "NW_003526695.1",
+                    "NW_003526926.1",
+                    "NW_003526829.1",
+                    "NW_003526595.1",
+                    "NW_003526712.1",
+                    "NW_003526652.1",
+                    "NW_003526802.1",
+                    "NW_003526632.1",
+                    "NW_003526883.1",
+                    "NW_003526833.1",
+                    "NW_003526938.1",
+                    "NW_003526629.1",
+                    "NW_003526671.1",
+                    "NW_003526667.1",
+                    "NW_003526621.1",
+                    "NW_003526814.1",
+                    "NW_003526796.1",
+                    "NW_003526609.1",
+                    "NW_003526793.1",
+                    "NW_003526637.1",
+                    "NW_003526710.1",
+                    "NW_003526586.1",
+                    "NW_003526758.1",
+                    "NW_003526689.1",
+                    "NW_003526783.1",
+                    "NW_003526690.1",
+                    "NW_003526843.1",
+                    "NW_003526657.1",
+                    "NW_003526807.1",
+                    "NW_003526579.1"
+                ],
+                "excluded_chromosomes": [
+                    "NW_003526743.1"
+                ]
+            },
+            {
+                "name": "sc_commune",
+                "source_fasta": "genome_data/fungi_diverse/sc_commune/full/sc_commune_full.fna",
+                "source_gff": "genome_data/fungi_diverse/sc_commune/full/sc_commune_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/sc_commune/train/sc_commune_train.fna",
+                "train_gff": "genome_data/fungi_diverse/sc_commune/train/sc_commune_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/sc_commune/test/sc_commune_test.fna",
+                "test_gff": "genome_data/fungi_diverse/sc_commune/test/sc_commune_test.gff",
+                "test_chromosomes": [
+                    "NW_026089559.1",
+                    "NW_026089544.1",
+                    "NW_026089556.1",
+                    "NW_026089555.1",
+                    "NW_026089548.1"
+                ],
+                "excluded_chromosomes": []
+            },
+            {
+                "name": "r_delemar",
+                "source_fasta": "genome_data/fungi_diverse/r_delemar/full/r_delemar_full.fna",
+                "source_gff": "genome_data/fungi_diverse/r_delemar/full/r_delemar_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/r_delemar/train/r_delemar_train.fna",
+                "train_gff": "genome_data/fungi_diverse/r_delemar/train/r_delemar_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/r_delemar/test/r_delemar_test.fna",
+                "test_gff": "genome_data/fungi_diverse/r_delemar/test/r_delemar_test.gff",
+                "test_chromosomes": [
+                    "NW_027137852.1",
+                    "NW_027137844.1",
+                    "NW_027137856.1",
+                    "NW_027137895.1",
+                    "NW_027137859.1",
+                    "NW_027137904.1",
+                    "NW_027137881.1",
+                    "NW_027137853.1",
+                    "NW_027137891.1",
+                    "NW_027137894.1",
+                    "NW_027137838.1",
+                    "NW_027137870.1",
+                    "NW_027137839.1",
+                    "NW_027137862.1",
+                    "NW_027137841.1"
+                ],
+                "excluded_chromosomes": [
+                    "NW_027137909.1",
+                    "NW_027137908.1"
+                ]
+            },
+            {
+                "name": "b_dendrobatidis",
+                "source_fasta": "genome_data/fungi_diverse/b_dendrobatidis/full/b_dendrobatidis_full.fna",
+                "source_gff": "genome_data/fungi_diverse/b_dendrobatidis/full/b_dendrobatidis_full.gff",
+                "train_fasta": "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_train.fna",
+                "train_gff": "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_train.gff",
+                "test_fasta": "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_test.fna",
+                "test_gff": "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_test.gff",
+                "test_chromosomes": [
+                    "NW_006281148.1",
+                    "NW_006281169.1",
+                    "NW_006281140.1",
+                    "NW_006281155.1",
+                    "NW_006281156.1",
+                    "NW_006281177.1",
+                    "NW_006281136.1",
+                    "NW_006281108.1",
+                    "NW_006281210.1",
+                    "NW_006281167.1",
+                    "NW_006281203.1",
+                    "NW_006281223.1",
+                    "NW_006281114.1",
+                    "NW_006281173.1",
+                    "NW_006281110.1"
+                ],
+                "excluded_chromosomes": []
+            }
+        ]
+    },
+    "splice_cnn": {
+        "model": "src/model/cnn/splice/trained_models/fungi_diverse_splice_cnn.pt",
+        "donor_scale": 1.0,
+        "donor_bias": 0.0,
+        "acceptor_scale": 1.0,
+        "acceptor_bias": 0.0,
+        "train_scores": [
+            "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_albicans/train/c_albicans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_lactis/train/k_lactis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/n_crassa/train/n_crassa_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/t_reesei/train/t_reesei_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/z_tritici/train/z_tritici_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/u_maydis/train/u_maydis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_graminis/train/p_graminis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/sc_commune/train/sc_commune_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/r_delemar/train/r_delemar_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_splice_cnn_scores.tsv"
+        ],
+        "test_scores": [
+            "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_albicans/test/c_albicans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_lactis/test/k_lactis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/n_crassa/test/n_crassa_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/t_reesei/test/t_reesei_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/z_tritici/test/z_tritici_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/u_maydis/test/u_maydis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_graminis/test/p_graminis_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/sc_commune/test/sc_commune_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/r_delemar/test/r_delemar_splice_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_splice_cnn_scores.tsv"
+        ],
+        "train_scores_minus": [
+            "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_albicans/train/c_albicans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_lactis/train/k_lactis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/n_crassa/train/n_crassa_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/t_reesei/train/t_reesei_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/z_tritici/train/z_tritici_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/u_maydis/train/u_maydis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_graminis/train/p_graminis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/sc_commune/train/sc_commune_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/r_delemar/train/r_delemar_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_splice_cnn_scores_minus.tsv"
+        ],
+        "test_scores_minus": [
+            "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_albicans/test/c_albicans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_lactis/test/k_lactis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/n_crassa/test/n_crassa_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/t_reesei/test/t_reesei_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/z_tritici/test/z_tritici_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/u_maydis/test/u_maydis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_graminis/test/p_graminis_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/sc_commune/test/sc_commune_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/r_delemar/test/r_delemar_splice_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_splice_cnn_scores_minus.tsv"
+        ]
+    },
+    "start_cnn": {
+        "model": "src/model/cnn/start/trained_models/fungi_diverse_start_cnn.pt",
+        "start_scale": 1.0,
+        "start_bias": 0.0,
+        "train_scores": [
+            "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_albicans/train/c_albicans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_lactis/train/k_lactis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/n_crassa/train/n_crassa_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/t_reesei/train/t_reesei_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/z_tritici/train/z_tritici_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/u_maydis/train/u_maydis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_graminis/train/p_graminis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/sc_commune/train/sc_commune_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/r_delemar/train/r_delemar_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_start_cnn_scores.tsv"
+        ],
+        "test_scores": [
+            "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_albicans/test/c_albicans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_lactis/test/k_lactis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/n_crassa/test/n_crassa_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/t_reesei/test/t_reesei_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/z_tritici/test/z_tritici_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/u_maydis/test/u_maydis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/p_graminis/test/p_graminis_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/sc_commune/test/sc_commune_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/r_delemar/test/r_delemar_start_cnn_scores.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_start_cnn_scores.tsv"
+        ],
+        "train_scores_minus": [
+            "genome_data/fungi_diverse/s_cerevisiae/train/s_cerevisiae_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_albicans/train/c_albicans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_lactis/train/k_lactis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/train/y_lipolytica_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/d_hansenii/train/d_hansenii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_phaffii/train/k_phaffii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/e_gossypii/train/e_gossypii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/n_crassa/train/n_crassa_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_nidulans/train/a_nidulans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/train/a_fumigatus_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/f_graminearum/train/f_graminearum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_oryzae/train/p_oryzae_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_cinerea/train/b_cinerea_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/train/s_sclerotiorum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/t_reesei/train/t_reesei_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/z_tritici/train/z_tritici_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/train/c_higginsianum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/train/cr_neoformans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/u_maydis/train/u_maydis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/co_cinerea/train/co_cinerea_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_graminis/train/p_graminis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/sc_commune/train/sc_commune_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/r_delemar/train/r_delemar_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/train/b_dendrobatidis_start_cnn_scores_minus.tsv"
+        ],
+        "test_scores_minus": [
+            "genome_data/fungi_diverse/s_cerevisiae/test/s_cerevisiae_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_albicans/test/c_albicans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_lactis/test/k_lactis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/y_lipolytica/test/y_lipolytica_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/d_hansenii/test/d_hansenii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/k_phaffii/test/k_phaffii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/e_gossypii/test/e_gossypii_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/n_crassa/test/n_crassa_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_nidulans/test/a_nidulans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/a_fumigatus/test/a_fumigatus_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/f_graminearum/test/f_graminearum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_oryzae/test/p_oryzae_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_cinerea/test/b_cinerea_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/s_sclerotiorum/test/s_sclerotiorum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/t_reesei/test/t_reesei_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/z_tritici/test/z_tritici_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/c_higginsianum/test/c_higginsianum_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/cr_neoformans/test/cr_neoformans_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/u_maydis/test/u_maydis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/co_cinerea/test/co_cinerea_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/p_graminis/test/p_graminis_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/sc_commune/test/sc_commune_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/r_delemar/test/r_delemar_start_cnn_scores_minus.tsv",
+            "genome_data/fungi_diverse/b_dendrobatidis/test/b_dendrobatidis_start_cnn_scores_minus.tsv"
+        ]
+    },
+    "filters": {
+        "min_first_cds_bp": 3,
+        "min_last_cds_bp": 3,
+        "min_intron_bp": 20,
+        "require_3n_cds": true,
+        "include_minus_strand": true
+    },
+    "emissions": {
+        "INTERGENIC": {
+            "type": "markov",
+            "order": 1
+        },
+        "INTRON": {
+            "type": "markov",
+            "order": 1
+        },
+        "EXON_FRAME": {
+            "type": "markov",
+            "order": 5,
+            "frame_tied": true
+        },
+        "DONOR": {
+            "type": "pssm",
+            "window_left": 3,
+            "window_right": 6
+        },
+        "ACCEPTOR": {
+            "type": "pssm",
+            "window_left": 15,
+            "window_right": 3
+        },
+        "START_CODON": {
+            "type": "deterministic"
+        },
+        "STOP_CODON": {
+            "type": "deterministic"
+        }
+    },
+    "smoothing": {
+        "transition_alpha": 0.02,
+        "emission_alpha": 0.1
+    }
+}

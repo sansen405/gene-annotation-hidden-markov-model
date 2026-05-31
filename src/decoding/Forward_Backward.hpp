@@ -12,9 +12,6 @@ namespace gene_hmm {
 
     class Forward_Backward {
         public:
-            //F[t][s] = log prob of the sequence prefix through position t, ending in state s
-            //B[t][s] = log prob of the sequence suffix after position t, conditioned on state s
-            //P[t][s] = log P(state s at position t | full sequence)
             using Probability_Matrix = vector<array<Log_Prob, NUM_STATES>>;
 
             static Probability_Matrix posterior_log_probs(

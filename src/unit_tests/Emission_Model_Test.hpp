@@ -62,29 +62,8 @@ namespace gene_hmm {
         CHECK("ACGTA -> C exon emission counted", counts[context][idx(Nucleotide::C)] == 1);
     }
 
-    static void test_emission_pssm_counts() {
-        cout << "\n[TEST 3] PSSM emission counts collect window columns\n";
-
-        vector<Nucleotide> nucs = {
-            Nucleotide::A, Nucleotide::C, Nucleotide::G, Nucleotide::T,
-            Nucleotide::A, Nucleotide::C, Nucleotide::G, Nucleotide::T
-        };
-        vector<State> states(nucs.size(), State::INTERGENIC);
-        states[3] = State::DONOR_1;
-        states[7] = State::DONOR_1; // Boundary case should be skipped.
-        vector<Chromosome_Range> ranges = {{"chr1", 0, nucs.size()}};
-
-        auto counts = Emission_Model::count_pssm_emissions(states, nucs, ranges, {State::DONOR_1}, 2, 3);
-        CHECK("PSSM has left + right columns", counts.size() == 5);
-        CHECK("column 0 counts C", counts[0][idx(Nucleotide::C)] == 1);
-        CHECK("column 1 counts G", counts[1][idx(Nucleotide::G)] == 1);
-        CHECK("column 2 counts T", counts[2][idx(Nucleotide::T)] == 1);
-        CHECK("column 3 counts A", counts[3][idx(Nucleotide::A)] == 1);
-        CHECK("column 4 counts C", counts[4][idx(Nucleotide::C)] == 1);
-    }
-
     static void test_emission_log_probs() {
-        cout << "\n[TEST 4] Emission log probabilities use additive smoothing\n";
+        cout << "\n[TEST 3] Emission log probabilities use additive smoothing\n";
 
         profile.emission_alpha = 1.0;
 
@@ -96,22 +75,10 @@ namespace gene_hmm {
               emission_approx_equal(log_probs[idx(Nucleotide::A)][idx(Nucleotide::C)], log(4.0 / 7.0)));
         CHECK("unseen Markov1 emission probability receives alpha mass",
               emission_approx_equal(log_probs[idx(Nucleotide::A)][idx(Nucleotide::A)], log(1.0 / 7.0)));
-
-        Emission_Model::PSSM_Count pssm_counts(1, array<uint64_t, NUM_NUCLEOTIDES>{});
-        pssm_counts[0][idx(Nucleotide::G)] = 2;
-        auto pssm_log_probs = Emission_Model::compute_pssm_log_probs(pssm_counts);
-        CHECK("PSSM column probabilities are smoothed",
-              emission_approx_equal(pssm_log_probs[0][idx(Nucleotide::G)], log(3.0 / 6.0)));
-
-        Emission_Model::PSSM_Count background_counts(1, array<uint64_t, NUM_NUCLEOTIDES>{});
-        background_counts[0][idx(Nucleotide::A)] = 2;
-        auto pssm_log_odds = Emission_Model::compute_pssm_log_odds(pssm_counts, background_counts);
-        CHECK("PSSM log-odds compares site and background columns",
-              emission_approx_equal(pssm_log_odds[0][idx(Nucleotide::G)], log(3.0 / 6.0) - log(1.0 / 6.0)));
     }
 
     static void test_emission_deterministic_codons() {
-        cout << "\n[TEST 5] Deterministic codon emissions enforce expected bases\n";
+        cout << "\n[TEST 4] Deterministic codon emissions enforce expected bases\n";
 
         CHECK("START_CODON_1 emits A with log probability 0",
               Emission_Model::get_deterministic_log_prob(State::START_CODON_1, Nucleotide::A) == 0.0);
@@ -124,7 +91,7 @@ namespace gene_hmm {
     }
 
     static void test_emission_dispatch_defaults() {
-        cout << "\n[TEST 6] emission_log_prob dispatches by state family\n";
+        cout << "\n[TEST 5] emission_log_prob dispatches by state family\n";
 
         Emission_Model model;
         vector<Nucleotide> nucs = {
@@ -137,12 +104,8 @@ namespace gene_hmm {
               emission_approx_equal(model.emission_log_prob(State::INTERGENIC, 0, nucs), log(0.25)));
         CHECK("EXON_FRAME uses uniform fallback before 5-base context exists",
               emission_approx_equal(model.emission_log_prob(State::EXON_FRAME_1, 4, nucs), log(0.25)));
-        CHECK("DONOR PSSM uses neutral default log-odds for canonical GT windows",
-              emission_approx_equal(model.emission_log_prob(State::DONOR_1, 3, nucs), 0.0));
-        CHECK("DONOR PSSM returns LOG_ZERO near boundary",
+        CHECK("DONOR returns LOG_ZERO without canonical GT consensus",
               model.emission_log_prob(State::DONOR_1, 1, nucs) == LOG_ZERO);
-        CHECK("START_CODON_1 uses neutral default signal for ATG",
-              model.emission_log_prob(State::START_CODON_1, 0, nucs) == 0.0);
         CHECK("START_CODON_3 dispatches to deterministic G",
               model.emission_log_prob(State::START_CODON_3, 2, nucs) == 0.0);
 
@@ -179,7 +142,6 @@ namespace gene_hmm {
 
         test_emission_markov1_counts();
         test_emission_markov5_counts();
-        test_emission_pssm_counts();
         test_emission_log_probs();
         test_emission_deterministic_codons();
         test_emission_dispatch_defaults();

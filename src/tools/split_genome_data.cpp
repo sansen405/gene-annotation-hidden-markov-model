@@ -161,7 +161,7 @@ set<string> test_chromosomes_from_dataset(const Species_Dataset& dataset) {
     return set<string>(dataset.test_chromosomes.begin(), dataset.test_chromosomes.end());
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     try {

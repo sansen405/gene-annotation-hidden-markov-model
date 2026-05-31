@@ -104,9 +104,6 @@ namespace gene_hmm {
 
         if (T == 0) return {};
 
-        // When a length distribution is supplied, introns are modeled as
-        // semi-Markov segments: drop the per-step geometric self-loop cost and
-        // charge log P(length) once when the body closes into an acceptor.
         const bool use_length_model = !intron_length_log_prob.empty();
         auto length_log_prob = [&](size_t length) -> Log_Prob {
             if (intron_length_log_prob.empty()) {

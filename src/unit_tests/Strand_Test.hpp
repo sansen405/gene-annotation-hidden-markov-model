@@ -17,15 +17,9 @@ namespace gene_hmm {
     static const string STRAND_FNA_PATH = "src/unit_tests/tmp_strand_test.fna";
     static const string STRAND_GFF_PATH = "src/unit_tests/tmp_strand_test.gff";
 
-    // A 60 bp single-chromosome fixture with one minus-strand, two-exon gene. In
-    // reverse-complement coordinates the gene is a canonical forward gene:
-    //   CDS1 revcomp [10,18], intron [19,40] (22 bp), CDS2 revcomp [41,49].
-    // Mirrored to forward GFF coordinates (K = L-1 = 59) the CDS fragments are
-    //   [11,19] and [42,50] (1-based), strand '-'.
     static void write_strand_fixture() {
         ofstream fna(STRAND_FNA_PATH);
         fna << ">chr1 strand fixture\n";
-        // 60 arbitrary bases; nucleotide content does not affect region labeling.
         fna << "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT\n";
 
         ofstream gff(STRAND_GFF_PATH);
@@ -76,9 +70,6 @@ namespace gene_hmm {
               count_state(states, State::ACCEPTOR_2) +
               count_state(states, State::ACCEPTOR_3) == 1);
 
-        // The minus gene's 5' start codon sits at the low revcomp coordinate (index
-        // 10), which maps back to forward coordinate 59 - 10 = 49 (the high end of
-        // the gene on the plus strand, as expected for a minus-strand gene).
         CHECK("start codon at revcomp index 10", states[10] == State::START_CODON_1);
         CHECK("stop codon closes at revcomp index 49", states[49] == State::STOP_CODON_3);
 

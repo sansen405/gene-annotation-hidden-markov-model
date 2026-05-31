@@ -5,34 +5,12 @@ from torch import nn
 
 
 class StartCNN(nn.Module):
-    """1D CNN for translation-start scoring.
-
-    Mirrors the splice CNN's position-aware design (dilated convs + a few
-    positional pooling bins instead of one global value) so the head keeps
-    coarse information about where context sits relative to the candidate ATG at
-    the window center. The crop is asymmetric and downstream-biased, following
-    translation-initiation biology:
-      * ~20 bp upstream — the Kozak / initiation context (core -6..+4, with the
-        -3 purine and +4 G the strongest positions) plus proximal 5' UTR
-        composition that separates a real start from intergenic/UTR sequence.
-      * the ATG at the window center.
-      * ~60 bp (~20 codons) downstream — coding-frame periodicity at the ORF
-        onset, the single most discriminative cue between a true start and a
-        downstream internal in-frame Met (which the gene-start penalty cannot
-        distinguish).
-    The crop (80 bp) is the same order as the splice heads (donor 31 bp,
-    acceptor 61 bp) and well inside the 121 bp input window.
-    Output shape: (batch, 1) — the start logit.
-    """
-
     POOL_BINS = 8
 
     def __init__(self, window_size: int = 121, hidden_channels: int = 128) -> None:
         super().__init__()
         self.window_size = window_size
         center = window_size // 2
-        # ATG occupies [center, center + 3). Upstream Kozak/5' UTR context plus a
-        # wider downstream coding-onset window (downstream-biased).
         self.start_slice = (max(0, center - 20), min(window_size, center + 60))
 
         def _backbone() -> nn.Sequential:
@@ -44,9 +22,6 @@ class StartCNN(nn.Module):
                 nn.Conv1d(hidden_channels, hidden_channels, kernel_size=5, padding=2),
                 nn.BatchNorm1d(hidden_channels),
                 nn.ReLU(),
-                # Stacked dilated convolutions grow the receptive field
-                # exponentially (d=2: 15bp, d=4: 23bp, d=8: 39bp) so the head can
-                # see Kozak context and the first codons without extra parameters.
                 nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=2, dilation=2),
                 nn.BatchNorm1d(hidden_channels),
                 nn.ReLU(),

@@ -37,7 +37,6 @@ namespace gene_hmm {
         while (getline(file, line)) {
             if (line.empty()) continue;
             if (line[0] == '>') {
-                //Close the previous range now that we know where it ended
                 if (!ranges.empty()) ranges.back().end = cumulative;
                 size_t end = 1;
                 while (end < line.size() &&
@@ -86,7 +85,7 @@ namespace gene_hmm {
         vector<Nucleotide> result(nucleotides.size());
         const size_t n = nucleotides.size();
         for (size_t i = 0; i < n; i++) {
-            // 5 - value maps A<->T (1<->4) and C<->G (2<->3); reverse the order.
+            //5-value maps A<->T and C<->G while iterating in reverse
             uint8_t complement = static_cast<uint8_t>(5 - static_cast<uint8_t>(nucleotides[n - 1 - i]));
             result[i] = static_cast<Nucleotide>(complement);
         }
@@ -111,7 +110,7 @@ namespace gene_hmm {
                     case 'G': nuc_sequence.push_back(Nucleotide::G); break;
                     case 'T': nuc_sequence.push_back(Nucleotide::T); break;
                     default:
-                        // Preserve FASTA/GFF coordinate alignment for ambiguous bases.
+                        //map ambiguous bases to A to preserve coordinate alignment
                         nuc_sequence.push_back(Nucleotide::A);
                         break;
                 }

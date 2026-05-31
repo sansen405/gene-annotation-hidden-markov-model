@@ -1,0 +1,34 @@
+# Curated diverse-fungi benchmark set for Gene_Analysis_HMM.
+# Chosen to span the fungal kingdom and (more importantly) the intron-density
+# gradient that stresses the splice/intron model: from intron-poor budding
+# yeasts (~0-0.05 introns/gene) through filamentous ascomycetes (~1-2) to
+# intron-rich basidiomycetes and early-diverging fungi (~4-6).
+#
+# folder_name <TAB> taxon_query <TAB> lineage_group
+# taxon_query is resolved to the best annotated RefSeq (fallback GenBank)
+# assembly via the NCBI datasets API at build time, so accessions are never
+# hard-coded/stale.
+s_cerevisiae	Saccharomyces cerevisiae	saccharomycotina
+c_albicans	Candida albicans	saccharomycotina
+k_lactis	Kluyveromyces lactis	saccharomycotina
+y_lipolytica	Yarrowia lipolytica	saccharomycotina
+d_hansenii	Debaryomyces hansenii	saccharomycotina
+k_phaffii	Komagataella phaffii	saccharomycotina
+e_gossypii	Eremothecium gossypii	saccharomycotina
+n_crassa	Neurospora crassa	pezizomycotina
+a_nidulans	Aspergillus nidulans	pezizomycotina
+a_fumigatus	Aspergillus fumigatus	pezizomycotina
+f_graminearum	Fusarium graminearum	pezizomycotina
+p_oryzae	Pyricularia oryzae	pezizomycotina
+b_cinerea	Botrytis cinerea	pezizomycotina
+s_sclerotiorum	Sclerotinia sclerotiorum	pezizomycotina
+t_reesei	Trichoderma reesei	pezizomycotina
+z_tritici	Zymoseptoria tritici	pezizomycotina
+c_higginsianum	Colletotrichum higginsianum	pezizomycotina
+cr_neoformans	Cryptococcus neoformans	basidiomycota
+u_maydis	Ustilago maydis	basidiomycota
+co_cinerea	Coprinopsis cinerea	basidiomycota
+p_graminis	Puccinia graminis	basidiomycota
+sc_commune	Schizophyllum commune	basidiomycota
+r_delemar	Rhizopus delemar	mucoromycota
+b_dendrobatidis	Batrachochytrium dendrobatidis	chytridiomycota

@@ -197,12 +197,6 @@ Emission_Model train_emissions(
             train_ranges,
             {State::INTRON_1, State::INTRON_2, State::INTRON_3}));
 
-    model.exon_lp = Emission_Model::compute_markov5_log_probs(
-        Emission_Model::count_markov5_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            {State::EXON_FRAME_1, State::EXON_FRAME_2, State::EXON_FRAME_3}));
     model.exon_frame_lp[0] = Emission_Model::compute_markov5_log_probs(
         Emission_Model::count_markov5_emissions(
             states,
@@ -221,60 +215,6 @@ Emission_Model train_emissions(
             nucleotides,
             train_ranges,
             {State::EXON_FRAME_3}));
-
-    auto start_targets = vector<State>{State::START_CODON_1};
-    model.start_codon_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            start_targets,
-            model.start_window_left,
-            model.start_window_right,
-            Splice_Signal::START_CODON));
-
-    auto donor_targets = vector<State>{State::DONOR_1, State::DONOR_2, State::DONOR_3};
-    model.donor_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            donor_targets,
-            model.donor_window_left,
-            model.donor_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            donor_targets,
-            model.donor_window_left,
-            model.donor_window_right,
-            Splice_Signal::DONOR));
-
-    auto acceptor_targets = vector<State>{State::ACCEPTOR_1, State::ACCEPTOR_2, State::ACCEPTOR_3};
-    model.acceptor_lp = Emission_Model::compute_pssm_log_odds(
-        Emission_Model::count_pssm_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            acceptor_targets,
-            model.acceptor_window_left,
-            model.acceptor_window_right),
-        Emission_Model::count_pssm_background_emissions(
-            states,
-            nucleotides,
-            train_ranges,
-            acceptor_targets,
-            model.acceptor_window_left,
-            model.acceptor_window_right,
-            Splice_Signal::ACCEPTOR));
 
     return model;
 }
@@ -324,27 +264,21 @@ json confidence_for_range(
     return values;
 }
 
-// A decoded gene held in forward-genome coordinates so plus- and minus-strand
-// predictions can be merged. score is the Viterbi path log-probability of the gene
-// sub-path, used to resolve overlaps between strands.
 struct Gene_Prediction {
-    size_t fwd_start = 0; // 0-based inclusive, forward coordinates
-    size_t fwd_end = 0;   // 0-based exclusive, forward coordinates
+    size_t fwd_start = 0;
+    size_t fwd_end = 0;
     Log_Prob score = 0.0;
-    json payload;         // prediction JSON without the id
+    json payload;
 };
 
-// Map exon/intron intervals from reverse-complement coordinates back to forward
-// coordinates. Input intervals are 1-based inclusive in revcomp-local space; output
-// is 1-based inclusive in forward-local space, sorted ascending by start.
 json map_intervals_to_forward(const json& revcomp_intervals, size_t length) {
     json out = json::array();
     for(const auto& interval : revcomp_intervals){
-        size_t rev_start = interval["start"].get<size_t>(); // 1-based inclusive
-        size_t rev_end = interval["end"].get<size_t>();      // 1-based inclusive
-        // revcomp 0-based [rev_start-1, rev_end) -> forward 0-based [L-rev_end, L-rev_start+1)
-        size_t fwd_start = length - rev_end;       // 0-based inclusive
-        size_t fwd_end = length - (rev_start - 1); // 0-based exclusive
+        size_t rev_start = interval["start"].get<size_t>();
+        size_t rev_end = interval["end"].get<size_t>();
+        //revcomp 0-based [rev_start-1,rev_end) -> forward 0-based [L-rev_end,L-rev_start+1)
+        size_t fwd_start = length - rev_end;
+        size_t fwd_end = length - (rev_start - 1);
         out.push_back({{"start", fwd_start + 1}, {"end", fwd_end}});
     }
     sort(out.begin(), out.end(), [](const json& a, const json& b){
@@ -353,7 +287,6 @@ json map_intervals_to_forward(const json& revcomp_intervals, size_t length) {
     return out;
 }
 
-// Per-base confidence for a minus-strand gene, reported at forward coordinates.
 json confidence_for_range_minus(
     const vector<State>& states,
     const vector<double>& confidence,
@@ -363,7 +296,7 @@ json confidence_for_range_minus(
 {
     json values = json::array();
     for(size_t pos = start; pos < end; pos++){
-        size_t fwd_position = length - 1 - pos; // 0-based forward
+        size_t fwd_position = length - 1 - pos;
         values.push_back({
             {"position", fwd_position + 1},
             {"state", state_family(states[pos])},
@@ -419,9 +352,6 @@ void collect_plus_genes(
     }
 }
 
-// chromosome_states/nucleotides/confidence are in reverse-complement coordinates of a
-// chromosome of length `length`. Genes are mapped to forward coordinates and tagged
-// strand "-"; the reported sequence is the coding (mRNA-sense) sequence.
 void collect_minus_genes(
     vector<Gene_Prediction>& genes,
     const vector<Nucleotide>& chromosome_nucleotides,
@@ -445,8 +375,8 @@ void collect_minus_genes(
         }
         size_t gene_end = pos;
 
-        size_t fwd_start = length - gene_end; // 0-based inclusive (forward)
-        size_t fwd_end = length - gene_start; // 0-based exclusive (forward)
+        size_t fwd_start = length - gene_end;
+        size_t fwd_end = length - gene_start;
 
         json prediction;
         prediction["scaffold"] = scaffold;
@@ -471,9 +401,6 @@ void collect_minus_genes(
     }
 }
 
-// Resolve overlapping genes (only possible across strands) by keeping the higher
-// Viterbi path log-probability, mirroring how a single dual-strand HMM would let
-// likelihood pick one strand per locus.
 vector<Gene_Prediction> merge_strand_genes(vector<Gene_Prediction> genes) {
     sort(genes.begin(), genes.end(), [](const Gene_Prediction& a, const Gene_Prediction& b){
         if(a.fwd_start != b.fwd_start) return a.fwd_start < b.fwd_start;
@@ -507,7 +434,7 @@ string value_after_arg(int argc, char** argv, const string& name, const string& 
     return fallback;
 }
 
-} // namespace
+}
 
 namespace gene_hmm {
     extern Genome_Profile profile;
@@ -548,7 +475,6 @@ int main(int argc, char** argv) {
             gene_hmm::profile.splice_cnn.acceptor_scale,
             gene_hmm::profile.splice_cnn.acceptor_bias);
 
-        // Translation-start CNN scores are required for START_CODON_1 emissions.
         if(start_cnn_scores_path.empty()){
             throw runtime_error("--start-cnn-scores PATH is required for CNN start emissions.");
         }
@@ -557,9 +483,6 @@ int main(int argc, char** argv) {
             gene_hmm::profile.start_cnn.start_scale,
             gene_hmm::profile.start_cnn.start_bias);
 
-        // Optional minus-strand decode: requires the profile flag plus revcomp CNN
-        // score files for this input. The emission model is copied so the minus pass
-        // reads its own scores without disturbing the plus pass.
         bool dual_strand = gene_hmm::profile.include_minus_strand &&
             !splice_cnn_scores_minus_path.empty() &&
             !start_cnn_scores_minus_path.empty();

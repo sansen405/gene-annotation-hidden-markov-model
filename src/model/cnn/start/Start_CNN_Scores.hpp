@@ -8,9 +8,6 @@ namespace gene_hmm {
 
     using namespace std;
 
-    // Loads per-position translation-start log-odds produced by the start CNN and
-    // exposes them to Emission_Model, mirroring Splice_CNN_Scores. The score TSV is
-    // "position<TAB>start_score" per row (sparse: only ATG candidate positions).
     class Start_CNN_Scores {
     public:
         Start_CNN_Scores();

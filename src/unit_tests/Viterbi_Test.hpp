@@ -3,6 +3,7 @@
 #include "../decoding/Viterbi.hpp"
 #include "Test_Utils.hpp"
 #include <cmath>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,18 @@ namespace gene_hmm {
         return matrix;
     }
 
+    //donor/acceptor/start emissions require loaded CNN scores; empty files give neutral 0.0
+    static Emission_Model make_viterbi_test_model(size_t length) {
+        Emission_Model model;
+        const string splice_path = "/tmp/gene_hmm_viterbi_test_splice_scores.tsv";
+        const string start_path = "/tmp/gene_hmm_viterbi_test_start_scores.tsv";
+        { ofstream splice_file(splice_path); }
+        { ofstream start_file(start_path); }
+        model.load_splice_cnn_scores(splice_path, length);
+        model.load_start_cnn_scores(start_path, length);
+        return model;
+    }
+
     static void test_viterbi_empty_sequence() {
         cout << "\n[TEST 1] Empty sequence returns empty path\n";
 
@@ -33,8 +46,8 @@ namespace gene_hmm {
     static void test_viterbi_deterministic_start_codon_path() {
         cout << "\n[TEST 2] Deterministic path decodes ATG start codon\n";
 
-        Emission_Model model;
         vector<Nucleotide> nucs = {Nucleotide::A, Nucleotide::T, Nucleotide::G};
+        Emission_Model model = make_viterbi_test_model(nucs.size());
         auto transitions = make_viterbi_log_zero_matrix();
         transitions[idx(State::START)][idx(State::START_CODON_1)] = 0.0;
         transitions[idx(State::START_CODON_1)][idx(State::START_CODON_2)] = 0.0;
@@ -55,8 +68,8 @@ namespace gene_hmm {
     static void test_viterbi_intergenic_self_loop_path() {
         cout << "\n[TEST 3] Intergenic self-loop decodes repeated intergenic states\n";
 
-        Emission_Model model;
         vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::G, Nucleotide::T, Nucleotide::A};
+        Emission_Model model = make_viterbi_test_model(nucs.size());
         auto transitions = make_viterbi_log_zero_matrix();
         transitions[idx(State::START)][idx(State::INTERGENIC)] = 0.0;
         transitions[idx(State::INTERGENIC)][idx(State::INTERGENIC)] = 0.0;
@@ -72,8 +85,8 @@ namespace gene_hmm {
     static void test_viterbi_chooses_higher_scoring_path() {
         cout << "\n[TEST 4] Decoder chooses higher-scoring transition path\n";
 
-        Emission_Model model;
         vector<Nucleotide> nucs = {Nucleotide::A, Nucleotide::T, Nucleotide::G};
+        Emission_Model model = make_viterbi_test_model(nucs.size());
         auto transitions = make_viterbi_log_zero_matrix();
 
         transitions[idx(State::START)][idx(State::INTERGENIC)] = log(0.1);
@@ -97,12 +110,8 @@ namespace gene_hmm {
     static void test_viterbi_intron_body_min_length() {
         cout << "\n[TEST 5] Intron body duration constraint gates acceptor exit\n";
 
-        Emission_Model model;
-        model.acceptor_window_left = 1;
-        model.acceptor_window_right = 0;
-        model.acceptor_lp.assign(1, {0.0, 0.0, 0.0, 0.0});
-
         vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::A, Nucleotide::G};
+        Emission_Model model = make_viterbi_test_model(nucs.size());
         auto transitions = make_viterbi_log_zero_matrix();
 
         transitions[idx(State::START)][idx(State::INTRON_1)] = 0.0;
@@ -126,8 +135,8 @@ namespace gene_hmm {
     static void test_viterbi_gene_start_penalty() {
         cout << "\n[TEST 6] Gene start penalty discourages intergenic gene entry\n";
 
-        Emission_Model model;
         vector<Nucleotide> nucs = {Nucleotide::C, Nucleotide::A, Nucleotide::T, Nucleotide::G};
+        Emission_Model model = make_viterbi_test_model(nucs.size());
         auto transitions = make_viterbi_log_zero_matrix();
 
         transitions[idx(State::START)][idx(State::INTERGENIC)] = 0.0;
