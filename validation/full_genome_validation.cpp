@@ -22,13 +22,15 @@ namespace {
 using namespace gene_hmm;
 using namespace std;
 
-Log_Prob gene_start_penalty = 1.0;
+// Sweet spot from the T x penalty sweep (intron F1 0.8455, beats V3.1 on recall
+// and on every boundary metric, at predicted/gold gene ratio ~1.02).
+Log_Prob gene_start_penalty = 5.0;
 // p99 unlocks the long-tail introns the old p95 cap structurally excluded.
 double intron_cap_percentile = 0.99;
-// Temperature on log P(L): T > 1 flattens the intron length distribution so real
-// introns at unusual lengths get a smaller penalty (recovers recall without
-// blowing up false-intron precision).
-Log_Prob intron_length_temperature = 2.0;
+// Temperature on log P(L): T > 1 flattens the intron length distribution. The
+// sweep showed T=1.0 (no softening) was optimal in combination with the wider
+// cap and the Markov-5 intron emission.
+Log_Prob intron_length_temperature = 1.0;
 vector<Log_Prob> intron_length_log_probs;
 string splice_cnn_scores_path;
 Log_Prob donor_cnn_scale = 1.0;
@@ -259,8 +261,8 @@ Emission_Model train_emissions(
             train_ranges,
             {State::INTERGENIC}));
 
-    model.intron_lp = Emission_Model::compute_markov1_log_probs(
-        Emission_Model::count_markov1_emissions(
+    model.intron_lp = Emission_Model::compute_markov5_log_probs(
+        Emission_Model::count_markov5_emissions(
             states,
             nucleotides,
             train_ranges,
@@ -709,14 +711,14 @@ void print_usage(const string& program_name) {
     cerr << "  --tune-cnn-calibration   Grid-search CNN calibration on the evaluation labels\n";
     cerr << "  --tune-only              Stop after selecting CNN calibration\n";
     cerr << "  --tune-subset-ranges N   Usable evaluation intervals for tuning, default 64\n";
-    cerr << "  --gene-start-penalty VALUE  Log-prob penalty on INTERGENIC -> START_CODON_1, default 1.0\n";
+    cerr << "  --gene-start-penalty VALUE  Log-prob penalty on INTERGENIC -> START_CODON_1, default 5.0\n";
     cerr << "  --start-offset-report PATH  Write a start-boundary offset diagnostic (per-species + combined) to PATH\n";
     cerr << "  --start-window-left N    Start-codon PSSM bases upstream of the ATG (retrains the PSSM), default 6\n";
     cerr << "  --start-window-right N   Start-codon PSSM bases from the ATG onward (>=3 covers ATG), default 9\n";
     cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
     cerr << "  --emission-alpha VALUE   Emission smoothing alpha, default 0.1\n";
     cerr << "  --intron-cap-percentile VALUE  Training-length percentile used as the intron-body cap, default 0.99\n";
-    cerr << "  --intron-length-temperature VALUE  Softening factor on log P(intron length); >1 flattens, default 2.0\n\n";
+    cerr << "  --intron-length-temperature VALUE  Softening factor on log P(intron length); >1 flattens, default 1.0\n\n";
     cerr << "Example:\n";
     cerr << "  " << program_name
          << " --name c_elegans"

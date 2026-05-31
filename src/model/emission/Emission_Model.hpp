@@ -17,7 +17,7 @@ namespace gene_hmm {
     enum class Emission_Type {
         SILENT,                // START, END  (no emission, returns 0.0)
         MARKOV1_INTERGENIC,    // INTERGENIC
-        MARKOV1_INTRON,        // INTRON_*
+        MARKOV5_INTRON,        // INTRON_* — 5-base context, like the exon model
         MARKOV5_EXON,          // EXON_FRAME_*
         PSSM_DONOR,            // DONOR_*     
         PSSM_ACCEPTOR,         // ACCEPTOR_*
@@ -50,7 +50,7 @@ namespace gene_hmm {
 
         //Trained probability tables (one per state family)
         Markov1_Log_Prob intergenic_lp{};
-        Markov1_Log_Prob intron_lp{};
+        Markov5_Log_Prob intron_lp{};
         Markov5_Log_Prob exon_lp{};
         Frame_Markov5_Log_Prob exon_frame_lp{};
         PSSM_Log_Prob    start_codon_lp;

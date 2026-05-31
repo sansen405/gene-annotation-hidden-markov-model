@@ -35,9 +35,9 @@ namespace gene_hmm{
         {State::START, Emission_Type::SILENT},
         {State::END, Emission_Type::SILENT},
         {State::INTERGENIC, Emission_Type::MARKOV1_INTERGENIC},
-        {State::INTRON_1, Emission_Type::MARKOV1_INTRON},
-        {State::INTRON_2, Emission_Type::MARKOV1_INTRON},
-        {State::INTRON_3, Emission_Type::MARKOV1_INTRON},
+        {State::INTRON_1, Emission_Type::MARKOV5_INTRON},
+        {State::INTRON_2, Emission_Type::MARKOV5_INTRON},
+        {State::INTRON_3, Emission_Type::MARKOV5_INTRON},
         {State::EXON_FRAME_1, Emission_Type::MARKOV5_EXON},
         {State::EXON_FRAME_2, Emission_Type::MARKOV5_EXON},
         {State::EXON_FRAME_3, Emission_Type::MARKOV5_EXON},
@@ -340,9 +340,9 @@ namespace gene_hmm{
             case Emission_Type::MARKOV1_INTERGENIC:
                 if(t == 0) return log(1.0 / NUM_NUCLEOTIDES);
                 return intergenic_lp[idx(nucleotides[t - 1])][idx(nucleotides[t])];
-            case Emission_Type::MARKOV1_INTRON:
-                if(t == 0) return log(1.0 / NUM_NUCLEOTIDES);
-                return intron_lp[idx(nucleotides[t - 1])][idx(nucleotides[t])];
+            case Emission_Type::MARKOV5_INTRON:
+                if(t < 5) return log(1.0 / NUM_NUCLEOTIDES);
+                return intron_lp[encode_5mer(nucleotides, t)][idx(nucleotides[t])];
             case Emission_Type::MARKOV5_EXON:
                 if(t < 5) return log(1.0 / NUM_NUCLEOTIDES);
                 return exon_frame_lp[exon_frame_index(state)][encode_5mer(nucleotides, t)][idx(nucleotides[t])];

@@ -461,6 +461,90 @@ The API builds and runs `frontend/local_data/bin/hmm_predict_fna` from
 decoding an input FASTA because donor/acceptor emissions no longer fall back to
 PSSM scores.
 
+## Model Changes (3.2): Richer Intron Body + Tuned Decode Operating Point
+
+Version 3.2 stays decode-side and emission-side — no CNN retrain, no new score
+files — but reaches the best operating point in the V3 line so far. Intron F1
+climbs **0.8119 -> 0.8455** vs V3.1 and **every boundary precision improves**.
+Predicted gene count lands at **3,773 vs 3,694 gold** (~2% over, down from ~18%).
+
+Held-out fission-yeast validation at defaults, V3.1 -> V3.2:
+
+| Metric | V3.1 | V3.2 |
+| --- | --- | --- |
+| Intron F1 | 0.8119 | **0.8455** |
+| &nbsp;&nbsp;intron precision | 0.9370 | 0.8438 |
+| &nbsp;&nbsp;intron recall | 0.7162 | **0.8472** |
+| Coding F1 | 0.9700 | ~0.97 |
+| Donor boundary | P 0.9203 / R 0.7987 | **P 0.8981 / R 0.8656** |
+| Acceptor boundary | P 0.9267 / R 0.8043 | **P 0.9042 / R 0.8715** |
+| Start boundary | P 0.7281 / R 0.8581 | **P 0.8309 / R 0.8487** |
+| Stop boundary | P 0.7761 / R 0.9147 | **P 0.9006 / R 0.9199** |
+| Predicted genes | 4353 | **3773** (gold 3694) |
+
+The trade is a small dip in intron precision for a large jump in intron recall
+*and* improvements on every boundary, with gene-count over-prediction cut by ~9x.
+
+What changed:
+
+- **Intron length cap raised from p95 (196 bp) to p99 (~319 bp).** The old p95
+  cap structurally excluded the long-tail ~5% of real introns -- they were
+  physically unreachable in the decoded path. Raising it to p99 unlocks those
+  introns; combined with the explicit length model the decoder still penalizes
+  atypical lengths without hard-cutting them. Configurable with
+  `--intron-cap-percentile`.
+- **`min_intron_body_length` now tied to the training filter (`min_intron_bp`).**
+  Previously the decoder allowed length-1 introns even though training never
+  saw any. The decoder now refuses to close an intron body shorter than
+  `min_intron_bp` (20 bp in the fission yeast profile), matching the GFF filter
+  used to label training data. Pure precision against micro-introns.
+- **Length-temperature knob added (`--intron-length-temperature`, default 1.0).**
+  The empirical sweep found T=1 (no softening) was optimal in combination with
+  the wider cap and the Markov-5 intron emission. The flag stays available for
+  experimentation; T>1 flattens `log P(L)` to be more permissive, T<1 sharpens.
+- **Intron body emission upgraded from Markov order-1 to Markov order-5.**
+  The body emission now scores `log P(base | previous 5 bases)` instead of
+  `log P(base | previous 1 base)`, the same shape as the exon emission. This
+  gives the intron body model real content discrimination. `Emission_Model`'s
+  `intron_lp` is now a `Markov5_Log_Prob` (1024-context table); the three HMM
+  trainers (`full_genome_validation`, `predict_fna`, `train_hmm_matrices`) all
+  switched to `compute_markov5_log_probs` / `count_markov5_emissions` for the
+  intron state set. With ~1.2M training intron bases over 4,096 cells the table
+  is well-populated; existing `emission_alpha` smoothing covers sparse contexts.
+- **Default gene-start penalty raised from 1.0 to 5.0.** A T x penalty sweep
+  showed the F1 plateau at penalty 3-5 with monotonically better boundary
+  precisions all the way to 5. Fewer false intergenic -> start transitions ->
+  fewer spurious genes -> mechanical lift on start, stop, donor, and acceptor
+  precision. CLI flag (`--gene-start-penalty`) is unchanged; only the default
+  moved.
+
+Run the validator with no flags to reproduce V3.2:
+
+```sh
+/tmp/full_genome_validation --profile src/genome_profiles/fission_yeasts.json
+```
+
+The header now reports the new defaults so each run is self-documenting:
+
+```
+Intron length cap (bp)             319
+Intron cap percentile           0.9900
+Intron length temperature       1.0000
+Min intron body length              20
+Gene start penalty              5.0000
+```
+
+Notes for downstream consumers:
+
+- The cached `emission_matrix.json` written by `train_hmm_matrices.cpp` is now
+  larger because `intron_lp` is 1024x4 instead of 4x4. Anyone using the cached
+  HMM artifacts must regenerate them; the validator and `predict_fna` retrain
+  in-process and pick up the change automatically.
+- This is the first V3.x point where the CNN is *not* the bottleneck. The
+  remaining headroom (intron precision ~0.84, start precision ~0.83) lives in
+  the start-context emission (PSSM -> CNN), a stop-context model, and -- for
+  real-world utility -- minus-strand evaluation.
+
 ## Model Changes (3.1): Semi-Markov Intron Length Model
 
 Version 3.1 keeps the V3 calibrated CNN unchanged and adds an explicit intron

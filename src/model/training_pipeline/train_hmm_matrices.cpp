@@ -107,8 +107,8 @@ Emission_Model train_emissions(
             train_ranges,
             {State::INTERGENIC}));
 
-    model.intron_lp = Emission_Model::compute_markov1_log_probs(
-        Emission_Model::count_markov1_emissions(
+    model.intron_lp = Emission_Model::compute_markov5_log_probs(
+        Emission_Model::count_markov5_emissions(
             states,
             nucleotides,
             train_ranges,
