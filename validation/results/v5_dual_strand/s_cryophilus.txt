@@ -1,0 +1,28 @@
+
+=== Test: s_cryophilus:KE546988.1 ===
+Metric                               Value
+Evaluated bases                    1943352
+Exact 21-state accuracy             0.9765
+Illegal transitions                      0
+Predicted gene intervals               626
+Gold gene intervals                    645
+Intron length cap p95                  196
+Gene start penalty                  1.0000
+CNN donor scale                     1.0000
+CNN donor bias                      0.0000
+CNN acceptor scale                  1.0000
+CNN acceptor bias                   0.0000
+CNN start scale                     1.0000
+CNN start bias                     -6.0000
+
+Classification Metrics:
+Label          Precision      Recall          F1    Accuracy        TP        FP        FN        TN
+coding            0.9861      0.9783      0.9822      0.9832    900741     12660     19935   1010016
+intron            0.9402      0.7022      0.8040      0.9909     36170      2299     15340   1889543
+
+Boundary Metrics:
+Boundary       Precision      Recall       Exact   Predicted        Gold
+start             0.8594      0.8341         538         626         645
+stop              0.9265      0.8992         580         626         645
+donor             0.9485      0.7934         553         583         697
+acceptor          0.9400      0.7862         548         583         697

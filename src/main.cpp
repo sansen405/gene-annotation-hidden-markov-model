@@ -5,6 +5,7 @@
 #include "unit_tests/Emission_Model_Test.hpp"
 #include "unit_tests/Viterbi_Test.hpp"
 #include "unit_tests/Forward_Backward_Test.hpp"
+#include "unit_tests/Strand_Test.hpp"
 #include <iostream>
 #include <string>
 
@@ -33,6 +34,8 @@ int main(int argc, char** argv) {
     gene_hmm::run_Viterbi_tests();
 
     gene_hmm::run_Forward_Backward_tests();
+
+    gene_hmm::run_Strand_tests();
 
     return 0;
 }

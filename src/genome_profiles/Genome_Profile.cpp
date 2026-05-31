@@ -80,6 +80,12 @@ namespace gene_hmm {
             if (splice_cnn.contains("test_scores")) {
                 p.splice_cnn.test_score_paths = parse_string_list(splice_cnn["test_scores"]);
             }
+            if (splice_cnn.contains("train_scores_minus")) {
+                p.splice_cnn.train_score_minus_paths = parse_string_list(splice_cnn["train_scores_minus"]);
+            }
+            if (splice_cnn.contains("test_scores_minus")) {
+                p.splice_cnn.test_score_minus_paths = parse_string_list(splice_cnn["test_scores_minus"]);
+            }
             p.splice_cnn.donor_scale = splice_cnn.value("donor_scale", 1.0);
             p.splice_cnn.donor_bias = splice_cnn.value("donor_bias", 0.0);
             p.splice_cnn.acceptor_scale = splice_cnn.value("acceptor_scale", 1.0);
@@ -94,6 +100,12 @@ namespace gene_hmm {
             }
             if (start_cnn.contains("test_scores")) {
                 p.start_cnn.test_score_paths = parse_string_list(start_cnn["test_scores"]);
+            }
+            if (start_cnn.contains("train_scores_minus")) {
+                p.start_cnn.train_score_minus_paths = parse_string_list(start_cnn["train_scores_minus"]);
+            }
+            if (start_cnn.contains("test_scores_minus")) {
+                p.start_cnn.test_score_minus_paths = parse_string_list(start_cnn["test_scores_minus"]);
             }
             p.start_cnn.start_scale = start_cnn.value("start_scale", 1.0);
             p.start_cnn.start_bias = start_cnn.value("start_bias", 0.0);

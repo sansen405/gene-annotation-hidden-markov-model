@@ -46,6 +46,18 @@ namespace gene_hmm {
                 Log_Prob gene_start_penalty,
                 const vector<Log_Prob>& intron_length_log_prob);
 
+            // Log-probability of a decoded sub-path over [start, end), summing the
+            // emission log-prob of each base plus the transition into it (including
+            // the gene-start penalty on INTERGENIC -> START_CODON_1). Used to score
+            // competing genes when merging plus- and minus-strand predictions.
+            static Log_Prob path_log_prob(const vector<State>& states,
+                const vector<Nucleotide>& nucleotides,
+                const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+                const Emission_Model& emission_model,
+                Log_Prob gene_start_penalty,
+                size_t start,
+                size_t end);
+
 
     };
 }

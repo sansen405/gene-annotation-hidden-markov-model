@@ -205,4 +205,26 @@ namespace gene_hmm {
         }
         return genome_annotation;
     }
+
+    Log_Prob Viterbi::path_log_prob(
+        const vector<State>& states,
+        const vector<Nucleotide>& nucleotides,
+        const Transition_Model::Log_Prob_Matrix& transition_log_probs,
+        const Emission_Model& emission_model,
+        Log_Prob gene_start_penalty,
+        size_t start,
+        size_t end)
+    {
+        Log_Prob total = 0.0;
+        for(size_t t = start; t < end && t < states.size(); t++){
+            total += emission_model.emission_log_prob(states[t], t, nucleotides);
+            if(t == 0){
+                total += transition_log_probs[idx(State::START)][idx(states[t])];
+            } else {
+                total += transition_log_probs[idx(states[t - 1])][idx(states[t])];
+                total -= gene_entry_penalty(states[t - 1], states[t], gene_start_penalty);
+            }
+        }
+        return total;
+    }
 }

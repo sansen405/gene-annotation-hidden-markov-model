@@ -67,10 +67,23 @@ namespace gene_hmm {
     }
 
     vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path) {
+        return parse_regions(gff_path, fna_path, '+');
+    }
+
+    vector<int> GFF_Parser::parse_regions(string& gff_path, string& fna_path, char strand) {
         //Regions: {0 -> Intergenic, 1 -> CDS, 2 -> Intron, 3 -> Ignored annotation}
 
         size_t sequence_length = FNA_Parser::get_sequence_length(fna_path);
         auto chrom_offsets = FNA_Parser::get_chromosome_offsets(fna_path);
+
+        // Per-chromosome reverse-complement pivot K = first_global + last_global, so
+        // a forward global position p maps to revcomp global position K - p within
+        // the same chromosome (K = range.start + range.end - 1).
+        unordered_map<string, int> revcomp_pivot;
+        for (const auto& range : FNA_Parser::get_chromosome_ranges(fna_path)) {
+            revcomp_pivot[range.name] =
+                static_cast<int>(range.start) + static_cast<int>(range.end) - 1;
+        }
 
         ifstream file(gff_path);
         if (!file.is_open()) {
@@ -110,6 +123,17 @@ namespace gene_hmm {
             int CDS_curr_start = stoi(tokens[3]) - 1 + chrom_off;
             int CDS_curr_end = stoi(tokens[4]) - 1 + chrom_off;
 
+            // In minus mode the whole region vector lives in reverse-complement
+            // coordinates, so every fragment (kept or ignored) is mirrored within its
+            // chromosome and start/end swap.
+            if (strand == '-') {
+                int pivot = revcomp_pivot.at(tokens[0]);
+                int mirrored_start = pivot - CDS_curr_end;
+                int mirrored_end = pivot - CDS_curr_start;
+                CDS_curr_start = mirrored_start;
+                CDS_curr_end = mirrored_end;
+            }
+
             string attributes = tokens[8];
             string CDS_curr_parent_id = "";
             size_t parent_pos = attributes.find("Parent=");
@@ -122,7 +146,11 @@ namespace gene_hmm {
             if (!CDS_curr_parent_id.empty()) {
                 string key = tokens[0] + "|" + CDS_curr_parent_id;
                 gene_builder[key].fragments.push_back({CDS_curr_start, CDS_curr_end});
-                if (tokens[6] != "+") {
+                // Only transcripts on the requested strand are trainable/scorable;
+                // the opposite strand is marked unsupported so it is painted as
+                // ignored annotation rather than contributing signal.
+                string required_strand(1, strand);
+                if (tokens[6] != required_strand) {
                     gene_builder[key].supported = false;
                 }
             }

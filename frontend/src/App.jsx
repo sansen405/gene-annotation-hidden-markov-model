@@ -769,6 +769,7 @@ function PredictionResultsPage({
                 <tr>
                   <th>ID</th>
                   <th>Scaffold</th>
+                  <th>Strand</th>
                   <th>Start</th>
                   <th>End</th>
                   <th>Len</th>
@@ -787,6 +788,7 @@ function PredictionResultsPage({
                   >
                     <td>{prediction.id}</td>
                     <td>{prediction.scaffold}</td>
+                    <td>{prediction.strand ?? "+"}</td>
                     <td>{prediction.start}</td>
                     <td>{prediction.end}</td>
                     <td>{prediction.end - prediction.start + 1}</td>
@@ -1173,6 +1175,8 @@ function SelectedPrediction({ prediction }) {
         <dd>
           {prediction.scaffold}:{prediction.start}-{prediction.end}
         </dd>
+        <dt>Strand</dt>
+        <dd>{prediction.strand ?? "+"}</dd>
         <dt>Length</dt>
         <dd>{prediction.end - prediction.start + 1} bp</dd>
         <dt>UTR intervals</dt>
@@ -1180,9 +1184,9 @@ function SelectedPrediction({ prediction }) {
         <dt>Intron intervals</dt>
         <dd>{intronCount(prediction) || "None"}</dd>
         <dt>Start codon position</dt>
-        <dd>{prediction.start}</dd>
+        <dd>{(prediction.strand ?? "+") === "-" ? prediction.end - 2 : prediction.start}</dd>
         <dt>Stop codon position</dt>
-        <dd>{prediction.end - 2}</dd>
+        <dd>{(prediction.strand ?? "+") === "-" ? prediction.start : prediction.end - 2}</dd>
       </dl>
       <h3>Sequence Preview</h3>
       <pre>{highlightSequence(prediction.sequence || "")}</pre>

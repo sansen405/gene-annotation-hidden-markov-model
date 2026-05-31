@@ -327,6 +327,23 @@ def average_precision(scores: torch.Tensor, targets: torch.Tensor) -> float:
     return float((precision * sorted_targets).sum().item() / n_pos)
 
 
+# MPS conv1d rejects very large single-forward batches ("Output channels > 65536"),
+# so evaluation/calibration forwards run in mini-batches. The training loop already
+# batches via the DataLoader.
+EVAL_BATCH_SIZE = 4096
+
+
+def forward_in_batches(model, inputs, device, batch_size: int = EVAL_BATCH_SIZE):
+    outputs = []
+    with torch.no_grad():
+        for start in range(0, len(inputs), batch_size):
+            chunk = inputs[start : start + batch_size].to(device)
+            outputs.append(model(chunk).cpu())
+    if not outputs:
+        return torch.empty((0, 2), dtype=torch.float32)
+    return torch.cat(outputs)
+
+
 def detect_device() -> "torch.device":
     if torch.backends.mps.is_available():
         return torch.device("mps")
@@ -361,9 +378,8 @@ def train_model(
     # DataLoader feeds CPU tensors; each batch is moved to device inside the loop.
     loader = DataLoader(TensorDataset(train_inputs, train_labels), batch_size=batch_size, shuffle=True)
     model = model.to(device)
-    # Val tensors are small enough to pre-load onto device.
-    val_inputs = val_inputs.to(device)
-    val_labels = val_labels.to(device)
+    # Val tensors stay on CPU; evaluation runs in mini-batches (forward_in_batches)
+    # because MPS conv1d rejects a single forward over the full held-out set.
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     # Cosine annealing decays lr from 1e-3 to 0 over all epochs, which improves
@@ -393,11 +409,10 @@ def train_model(
                 log(f"epoch {epoch + 1}/{epochs}: batch {batch_index}/{total_batches}")
         scheduler.step()
         model.eval()
-        with torch.no_grad():
-            val_logits = model(val_inputs)
-            val_loss = float(bce_loss(val_logits, val_labels).item())
-            val_probs = torch.sigmoid(val_logits).cpu()
-        val_targets = val_labels.cpu()
+        val_logits = forward_in_batches(model, val_inputs, device)
+        val_loss = float(bce_loss(val_logits, val_labels).item())
+        val_probs = torch.sigmoid(val_logits)
+        val_targets = val_labels
         donor_ap = average_precision(val_probs[:, 0], val_targets[:, 0])
         acceptor_ap = average_precision(val_probs[:, 1], val_targets[:, 1])
         model.train()
@@ -410,9 +425,8 @@ def train_model(
 
     # Fit the score-time calibration so the HMM can decode at scale=1, bias=0.
     model.eval()
-    with torch.no_grad():
-        final_val_logits = model(val_inputs).cpu()
-    final_val_labels = val_labels.cpu()
+    final_val_logits = forward_in_batches(model, val_inputs, device)
+    final_val_labels = val_labels
     temperature = fit_temperature(final_val_logits, final_val_labels)
 
     def to_logit(p: float) -> float:
@@ -443,22 +457,27 @@ def write_scores(
     batch_size: int,
     device: "torch.device",
     calibration: Calibration,
+    reverse: bool = False,
 ) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Minus-strand scores are produced by scoring each record's reverse complement.
+    # Positions stay record.offset + local (revcomp-local), matching how the decoder
+    # builds the per-chromosome revcomp slice and the minus-strand gold track.
     log(
         f"writing scores: input={dataset.path} output={output_path} "
-        f"bases={format_count(dataset.base_count)}"
+        f"bases={format_count(dataset.base_count)} strand={'-' if reverse else '+'}"
     )
     start_time = time.perf_counter()
     written_bases = 0
     next_progress = 10
     with output_path.open("w") as output, torch.no_grad():
         for record in dataset.records:
-            for start in range(0, len(record.sequence), batch_size):
-                end = min(start + batch_size, len(record.sequence))
-                windows = [window_at(record.sequence, pos, radius) for pos in range(start, end)]
+            sequence = reverse_complement(record.sequence) if reverse else record.sequence
+            for start in range(0, len(sequence), batch_size):
+                end = min(start + batch_size, len(sequence))
+                windows = [window_at(sequence, pos, radius) for pos in range(start, end)]
                 logits = model(one_hot_encode_windows(windows).to(device)).cpu()
                 for offset, row in enumerate(logits):
                     position = record.offset + start + offset
@@ -488,28 +507,36 @@ def write_sparse_scores(
     batch_size: int,
     device: "torch.device",
     calibration: Calibration,
+    reverse: bool = False,
 ) -> None:
     model.eval()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    candidate_counts = [len(candidate_splice_positions(record.sequence)) for record in dataset.records]
+    # When reverse is set, candidates (GT/AG) are found on the reverse complement so
+    # the sparse minus-strand TSV covers canonical splice sites in revcomp coordinates.
+    sequences = [
+        reverse_complement(record.sequence) if reverse else record.sequence
+        for record in dataset.records
+    ]
+    candidate_counts = [len(candidate_splice_positions(sequence)) for sequence in sequences]
     total_candidates = sum(candidate_counts)
     log(
         f"writing sparse scores: input={dataset.path} output={output_path} "
-        f"bases={format_count(dataset.base_count)} candidates={format_count(total_candidates)}"
+        f"bases={format_count(dataset.base_count)} candidates={format_count(total_candidates)} "
+        f"strand={'-' if reverse else '+'}"
     )
 
     start_time = time.perf_counter()
     written_candidates = 0
     next_progress = 10
     with output_path.open("w") as output, torch.no_grad():
-        for record, candidate_count in zip(dataset.records, candidate_counts):
-            positions = candidate_splice_positions(record.sequence)
+        for record, sequence, candidate_count in zip(dataset.records, sequences, candidate_counts):
+            positions = candidate_splice_positions(sequence)
             if len(positions) != candidate_count:
                 raise RuntimeError("Candidate position count changed during sparse scoring.")
             for start in range(0, len(positions), batch_size):
                 batch_positions = positions[start : start + batch_size]
-                windows = [window_at(record.sequence, pos, radius) for pos in batch_positions]
+                windows = [window_at(sequence, pos, radius) for pos in batch_positions]
                 logits = model(one_hot_encode_windows(windows).to(device)).cpu()
                 for local_pos, row in zip(batch_positions, logits):
                     position = record.offset + local_pos
@@ -588,6 +615,11 @@ def apply_profile_defaults(args: argparse.Namespace) -> None:
         args.model_out = Path(model_path)
     args.train_scores_out = args.train_scores_out or list_from_json(splice_cnn.get("train_scores"), "train_scores")
     args.test_scores_out = args.test_scores_out or list_from_json(splice_cnn.get("test_scores"), "test_scores")
+    # Minus-strand score paths are optional; only generated when configured.
+    if args.train_scores_minus_out is None and splice_cnn.get("train_scores_minus") is not None:
+        args.train_scores_minus_out = list_from_json(splice_cnn.get("train_scores_minus"), "train_scores_minus")
+    if args.test_scores_minus_out is None and splice_cnn.get("test_scores_minus") is not None:
+        args.test_scores_minus_out = list_from_json(splice_cnn.get("test_scores_minus"), "test_scores_minus")
 
     filters = profile.get("filters")
     if isinstance(filters, dict):
@@ -622,6 +654,8 @@ def main() -> None:
     parser.add_argument("--model-out", type=Path)
     parser.add_argument("--train-scores-out", type=Path, nargs="+")
     parser.add_argument("--test-scores-out", type=Path, nargs="+")
+    parser.add_argument("--train-scores-minus-out", type=Path, nargs="+")
+    parser.add_argument("--test-scores-minus-out", type=Path, nargs="+")
     parser.add_argument("--radius", default=60, type=int)
     parser.add_argument("--epochs", default=10, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
@@ -716,18 +750,28 @@ def main() -> None:
             args.model_out,
         )
 
+    def emit(dataset: FastaDataset, score_path: Path, reverse: bool) -> None:
+        if args.sparse_scores:
+            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration, reverse)
+        else:
+            write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration, reverse)
+
     # Scores are written as calibrated log-odds (temperature + training-prior shift
     # applied here), so the HMM can decode at scale=1, bias=0 with no grid tuning.
     for dataset, score_path in zip(train_datasets, args.train_scores_out):
-        if args.sparse_scores:
-            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
-        else:
-            write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
+        emit(dataset, score_path, reverse=False)
     for dataset, score_path in zip(test_datasets, args.test_scores_out):
-        if args.sparse_scores:
-            write_sparse_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
-        else:
-            write_scores(model, dataset, args.radius, score_path, args.score_batch_size, device, calibration)
+        emit(dataset, score_path, reverse=False)
+
+    # Minus-strand (reverse-complement) scores, when configured for dual-strand decode.
+    if args.train_scores_minus_out:
+        validate_output_counts("training minus", args.train_fasta, args.train_scores_minus_out)
+        for dataset, score_path in zip(train_datasets, args.train_scores_minus_out):
+            emit(dataset, score_path, reverse=True)
+    if args.test_scores_minus_out:
+        validate_output_counts("test minus", args.test_fasta, args.test_scores_minus_out)
+        for dataset, score_path in zip(test_datasets, args.test_scores_minus_out):
+            emit(dataset, score_path, reverse=True)
     log("finished splice CNN score pipeline")
 
 

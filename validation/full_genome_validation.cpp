@@ -625,6 +625,93 @@ Sequence_Data load_evaluation_data(const Genome_Profile& profile) {
     return combined;
 }
 
+// Minus-strand variant: the nucleotides are reverse-complemented per chromosome and
+// the gold states come from parse_regions(..., '-'), so each minus-strand gene reads
+// as a canonical forward gene. Coordinates stay within each chromosome's [start, end)
+// slot, so chromosome ranges and dataset offsets match the plus-strand pass exactly
+// (and therefore line up with the revcomp CNN score TSVs).
+void append_dataset_minus(
+    Sequence_Data& combined,
+    const string& name,
+    const string& fasta_path,
+    const string& gff_path)
+{
+    size_t offset = combined.nucleotides.size();
+    combined.dataset_offsets.push_back(offset);
+
+    vector<Nucleotide> nucleotides = FNA_Parser::parse_sequence(fasta_path);
+    vector<Chromosome_Range> chromosomes = FNA_Parser::get_chromosome_ranges(fasta_path);
+
+    // Reverse-complement each chromosome in place so the slice stays in the same
+    // [start, end) span but reads 5'->3' on the minus strand.
+    for (const auto& chromosome : chromosomes) {
+        vector<Nucleotide> slice(
+            nucleotides.begin() + chromosome.start,
+            nucleotides.begin() + chromosome.end);
+        vector<Nucleotide> revcomp = FNA_Parser::reverse_complement(slice);
+        copy(revcomp.begin(), revcomp.end(), nucleotides.begin() + chromosome.start);
+    }
+
+    string mutable_gff_path = gff_path;
+    string mutable_fasta_path = fasta_path;
+    vector<int> regions = GFF_Parser::parse_regions(mutable_gff_path, mutable_fasta_path, '-');
+    vector<State> states = GFF_Parser::parse_states(regions);
+
+    if (states.size() != nucleotides.size()) {
+        throw runtime_error("Minus-strand state length does not match nucleotide length for " + name + ".");
+    }
+
+    combined.nucleotides.insert(combined.nucleotides.end(), nucleotides.begin(), nucleotides.end());
+    combined.states.insert(combined.states.end(), states.begin(), states.end());
+    combined.regions.insert(combined.regions.end(), regions.begin(), regions.end());
+    for (auto range : chromosomes) {
+        range.name = name + ":" + range.name;
+        range.start += offset;
+        range.end += offset;
+        combined.chromosomes.push_back(range);
+    }
+}
+
+Sequence_Data load_evaluation_data_minus(const Genome_Profile& profile) {
+    Sequence_Data combined;
+    for (const auto& dataset : profile.species) {
+        append_dataset_minus(combined, dataset.name, dataset.test_fasta_path, dataset.test_gff_path);
+    }
+    return combined;
+}
+
+// Sum two strand results into one combined report (all counts are strand-local and
+// additive; interval lists concatenate).
+Validation_Result merge_validation_results(const Validation_Result& a, const Validation_Result& b) {
+    Validation_Result merged = a;
+    add_metrics(merged.coding_total, b.coding_total);
+    add_metrics(merged.intron_total, b.intron_total);
+    merged.total_bases += b.total_bases;
+    merged.exact_matches += b.exact_matches;
+    merged.illegal_transitions += b.illegal_transitions;
+    merged.start_predicted += b.start_predicted;
+    merged.start_gold += b.start_gold;
+    merged.start_exact += b.start_exact;
+    merged.stop_predicted += b.stop_predicted;
+    merged.stop_gold += b.stop_gold;
+    merged.stop_exact += b.stop_exact;
+    merged.donor_predicted += b.donor_predicted;
+    merged.donor_gold += b.donor_gold;
+    merged.donor_exact += b.donor_exact;
+    merged.acceptor_predicted += b.acceptor_predicted;
+    merged.acceptor_gold += b.acceptor_gold;
+    merged.acceptor_exact += b.acceptor_exact;
+    merged.predicted_gene_intervals.insert(
+        merged.predicted_gene_intervals.end(),
+        b.predicted_gene_intervals.begin(),
+        b.predicted_gene_intervals.end());
+    merged.gold_gene_intervals.insert(
+        merged.gold_gene_intervals.end(),
+        b.gold_gene_intervals.begin(),
+        b.gold_gene_intervals.end());
+    return merged;
+}
+
 void print_state_family_counts(const string& label, const vector<State>& states) {
     cout << label
          << " intergenic=" << count_state(states, State::INTERGENIC)
@@ -1537,7 +1624,81 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    write_validation_report(cout, "Full Genome Holdout Validation", result, max_intron_body_length);
+    // Optional minus-strand pass: decode each chromosome's reverse complement with a
+    // separate emission model (loaded with the revcomp CNN scores), then merge the
+    // strand-local metrics into the combined report. Requires include_minus_strand,
+    // profile-configured minus score files, and profile (not single-file) scores.
+    auto all_paths_exist = [](const vector<string>& paths) {
+        for (const auto& path : paths) {
+            if (!filesystem::exists(path)) return false;
+        }
+        return !paths.empty();
+    };
+
+    bool minus_scores_present =
+        all_paths_exist(gene_hmm::profile.splice_cnn.test_score_minus_paths) &&
+        all_paths_exist(gene_hmm::profile.start_cnn.test_score_minus_paths);
+
+    bool dual_strand =
+        gene_hmm::profile.include_minus_strand &&
+        splice_cnn_scores_path.empty() &&
+        start_cnn_scores_path.empty() &&
+        minus_scores_present;
+
+    if (gene_hmm::profile.include_minus_strand && !minus_scores_present) {
+        cout << "\nNote: include_minus_strand is set but minus-strand CNN score files "
+                "were not found; running plus-strand only. Regenerate scores with the "
+                "minus score outputs (train_cached_model.py) to enable dual-strand decoding.\n";
+    }
+
+    Validation_Result final_result = result;
+    if (dual_strand) {
+        Sequence_Data eval_data_minus = load_evaluation_data_minus(gene_hmm::profile);
+        vector<Chromosome_Range> eval_ranges_minus =
+            split_usable_ranges(eval_data_minus.chromosomes, eval_data_minus.regions);
+
+        if (gene_hmm::profile.splice_cnn.test_score_minus_paths.size() != eval_data_minus.dataset_offsets.size() ||
+            gene_hmm::profile.start_cnn.test_score_minus_paths.size() != eval_data_minus.dataset_offsets.size()) {
+            cerr << "Profile minus-strand score path count does not match evaluation datasets.\n";
+            return 1;
+        }
+
+        Emission_Model emission_model_minus = emission_model;
+        emission_model_minus.load_splice_cnn_scores(
+            gene_hmm::profile.splice_cnn.test_score_minus_paths,
+            eval_data_minus.dataset_offsets,
+            eval_data_minus.nucleotides.size());
+        emission_model_minus.set_splice_cnn_calibration(
+            donor_cnn_scale, donor_cnn_bias, acceptor_cnn_scale, acceptor_cnn_bias);
+        emission_model_minus.load_start_cnn_scores(
+            gene_hmm::profile.start_cnn.test_score_minus_paths,
+            eval_data_minus.dataset_offsets,
+            eval_data_minus.nucleotides.size());
+        emission_model_minus.set_start_cnn_calibration(start_cnn_scale, start_cnn_bias);
+
+        Validation_Result minus_result;
+        try {
+            minus_result = decode_validation(
+                emission_model_minus,
+                transition_log_probs,
+                eval_data_minus,
+                eval_ranges_minus,
+                max_intron_body_length,
+                true);
+        } catch (const exception& e) {
+            cerr << e.what() << "\n";
+            return 1;
+        }
+
+        final_result = merge_validation_results(result, minus_result);
+
+        write_validation_report(cout, "Holdout Validation (+ strand)", result, max_intron_body_length);
+        write_validation_report(cout, "Holdout Validation (- strand)", minus_result, max_intron_body_length);
+        write_validation_report(
+            cout, "Full Genome Holdout Validation (both strands)", final_result, max_intron_body_length);
+    } else {
+        write_validation_report(cout, "Full Genome Holdout Validation", result, max_intron_body_length);
+    }
 
     if (!results_dir.empty()) {
         error_code ec;
@@ -1555,7 +1716,7 @@ int main(int argc, char** argv) {
             return 1;
         }
         write_validation_report(
-            combined_file, "Full Genome Holdout Validation (all tests combined)", result, max_intron_body_length);
+            combined_file, "Full Genome Holdout Validation (all tests combined)", final_result, max_intron_body_length);
         cout << "\nSaved combined results to " << combined_path << "\n";
 
         // Per-species reports: decode only that species' evaluation ranges. The

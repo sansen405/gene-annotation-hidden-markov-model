@@ -34,6 +34,9 @@ namespace gene_hmm {
         string model_path;
         vector<string> train_score_paths;
         vector<string> test_score_paths;
+        // Reverse-complement (minus-strand) score files for dual-strand decode.
+        vector<string> train_score_minus_paths;
+        vector<string> test_score_minus_paths;
         double donor_scale = 1.0;
         double donor_bias = 0.0;
         double acceptor_scale = 1.0;
@@ -44,6 +47,9 @@ namespace gene_hmm {
         string model_path;
         vector<string> train_score_paths;
         vector<string> test_score_paths;
+        // Reverse-complement (minus-strand) score files for dual-strand decode.
+        vector<string> train_score_minus_paths;
+        vector<string> test_score_minus_paths;
         double start_scale = 1.0;
         double start_bias = 0.0;
     };

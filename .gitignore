@@ -1,4 +1,5 @@
 # Keep large non-yeast genome source datasets local.
+genome_data/fungi_diverse/
 genome_data/aspergillus/
 genome_data/c_elegans/
 genome_data/candida/
@@ -15,6 +16,10 @@ genome_data/*_data/
 __pycache__/
 **/__pycache__/
 *.pyc
+
+# Local Python virtual environment.
+.venv/
+venv/
 
 # Local CNN training artifacts (keep test scores, ignore train scores).
 genome_data/fission_yeasts/**/train/*.tsv

@@ -112,6 +112,7 @@ function escapeAttribute(value) {
 function runToGff3(run) {
   const lines = ["##gff-version 3"];
   for (const prediction of run.predictions) {
+    const strand = prediction.strand === "-" ? "-" : "+";
     lines.push(
       [
         prediction.scaffold,
@@ -120,7 +121,7 @@ function runToGff3(run) {
         prediction.start,
         prediction.end,
         ".",
-        ".",
+        strand,
         ".",
         `ID=${escapeAttribute(prediction.id)}`,
       ].join("\t")
@@ -134,7 +135,7 @@ function runToGff3(run) {
           exon.start,
           exon.end,
           ".",
-          ".",
+          strand,
           ".",
           `ID=${escapeAttribute(prediction.id)}.cds${index + 1};Parent=${escapeAttribute(prediction.id)}`,
         ].join("\t")
@@ -145,12 +146,13 @@ function runToGff3(run) {
 }
 
 function runToCsv(run) {
-  const rows = ["id,scaffold,start,end,length,exon_count,intron_count"];
+  const rows = ["id,scaffold,strand,start,end,length,exon_count,intron_count"];
   for (const prediction of run.predictions) {
     rows.push(
       [
         prediction.id,
         prediction.scaffold,
+        prediction.strand ?? "+",
         prediction.start,
         prediction.end,
         prediction.end - prediction.start + 1,
@@ -171,6 +173,8 @@ function runToBed(run) {
         prediction.start - 1,
         prediction.end,
         prediction.id,
+        0,
+        prediction.strand ?? "+",
       ].join("\t")
     );
   }
