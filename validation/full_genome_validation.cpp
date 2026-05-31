@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -38,6 +40,7 @@ bool tune_only = false;
 size_t tune_subset_ranges = 64;
 bool collect_start_positions = false;
 string start_offset_report_path;
+string results_dir;
 const long START_MATCH_WINDOW = 300;
 
 struct Binary_Metrics {
@@ -182,13 +185,13 @@ void add_metrics(Binary_Metrics& total, const Binary_Metrics& next) {
     total.tn += next.tn;
 }
 
-void print_binary_metrics_row(const string& label, const Binary_Metrics& metrics) {
+void print_binary_metrics_row(ostream& out, const string& label, const Binary_Metrics& metrics) {
     double precision = divide(metrics.tp, metrics.tp + metrics.fp);
     double recall = divide(metrics.tp, metrics.tp + metrics.fn);
     double accuracy = divide(metrics.tp + metrics.tn, metrics.tp + metrics.fp + metrics.fn + metrics.tn);
 
-    cout << fixed << setprecision(4);
-    cout << left << setw(12) << label
+    out << fixed << setprecision(4);
+    out << left << setw(12) << label
          << right << setw(12) << precision
          << setw(12) << recall
          << setw(12) << f1(precision, recall)
@@ -199,8 +202,8 @@ void print_binary_metrics_row(const string& label, const Binary_Metrics& metrics
          << setw(10) << metrics.tn << "\n";
 }
 
-void print_binary_metrics_header() {
-    cout << left << setw(12) << "Label"
+void print_binary_metrics_header(ostream& out) {
+    out << left << setw(12) << "Label"
          << right << setw(12) << "Precision"
          << setw(12) << "Recall"
          << setw(12) << "F1"
@@ -212,13 +215,14 @@ void print_binary_metrics_header() {
 }
 
 void print_boundary_metrics_row(
+    ostream& out,
     const string& label,
     size_t exact,
     size_t predicted,
     size_t gold)
 {
-    cout << fixed << setprecision(4);
-    cout << left << setw(12) << label
+    out << fixed << setprecision(4);
+    out << left << setw(12) << label
          << right << setw(12) << divide(exact, predicted)
          << setw(12) << divide(exact, gold)
          << setw(12) << exact
@@ -226,8 +230,8 @@ void print_boundary_metrics_row(
          << setw(12) << gold << "\n";
 }
 
-void print_boundary_metrics_header() {
-    cout << left << setw(12) << "Boundary"
+void print_boundary_metrics_header(ostream& out) {
+    out << left << setw(12) << "Boundary"
          << right << setw(12) << "Precision"
          << setw(12) << "Recall"
          << setw(12) << "Exact"
@@ -717,6 +721,7 @@ void print_usage(const string& program_name) {
     cerr << "  --tune-subset-ranges N   Usable evaluation intervals for tuning, default 64\n";
     cerr << "  --gene-start-penalty VALUE  Log-prob penalty on INTERGENIC -> START_CODON_1, default 1.0\n";
     cerr << "  --start-offset-report PATH  Write a start-boundary offset diagnostic (per-species + combined) to PATH\n";
+    cerr << "  --results-dir DIR        Write combined.txt and per-species result files into DIR\n";
     cerr << "  --start-window-left N    Start-codon PSSM bases upstream of the ATG (retrains the PSSM), default 6\n";
     cerr << "  --start-window-right N   Start-codon PSSM bases from the ATG onward (>=3 covers ATG), default 9\n";
     cerr << "  --transition-alpha VALUE Transition smoothing alpha, default 0.02\n";
@@ -809,6 +814,8 @@ Genome_Profile parse_args(int argc, char** argv) {
             gene_start_penalty = stod(value);
         } else if (arg == "--start-offset-report") {
             start_offset_report_path = value;
+        } else if (arg == "--results-dir") {
+            results_dir = value;
         } else if (arg == "--start-window-left") {
             profile.emissions["START_CODON"].window_left = stoull(value);
         } else if (arg == "--start-window-right") {
@@ -1271,6 +1278,45 @@ void tune_start_cnn_calibration(
          << "\n";
 }
 
+// Writes the full metric/classification/boundary report for one decode result
+// to any stream, so the same layout serves stdout, the combined results file,
+// and the per-species results files.
+void write_validation_report(
+    ostream& out,
+    const string& header,
+    const Validation_Result& result,
+    size_t max_intron_body_length)
+{
+    out << "\n=== " << header << " ===\n";
+    out << fixed << setprecision(4);
+    out << left << setw(28) << "Metric" << right << setw(14) << "Value" << "\n";
+    out << left << setw(28) << "Evaluated bases" << right << setw(14) << result.total_bases << "\n";
+    out << left << setw(28) << "Exact 21-state accuracy" << right << setw(14) << divide(result.exact_matches, result.total_bases) << "\n";
+    out << left << setw(28) << "Illegal transitions" << right << setw(14) << result.illegal_transitions << "\n";
+    out << left << setw(28) << "Predicted gene intervals" << right << setw(14) << result.predicted_gene_intervals.size() << "\n";
+    out << left << setw(28) << "Gold gene intervals" << right << setw(14) << result.gold_gene_intervals.size() << "\n";
+    out << left << setw(28) << "Intron length cap p95" << right << setw(14) << max_intron_body_length << "\n";
+    out << left << setw(28) << "Gene start penalty" << right << setw(14) << gene_start_penalty << "\n";
+    out << left << setw(28) << "CNN donor scale" << right << setw(14) << donor_cnn_scale << "\n";
+    out << left << setw(28) << "CNN donor bias" << right << setw(14) << donor_cnn_bias << "\n";
+    out << left << setw(28) << "CNN acceptor scale" << right << setw(14) << acceptor_cnn_scale << "\n";
+    out << left << setw(28) << "CNN acceptor bias" << right << setw(14) << acceptor_cnn_bias << "\n";
+    out << left << setw(28) << "CNN start scale" << right << setw(14) << start_cnn_scale << "\n";
+    out << left << setw(28) << "CNN start bias" << right << setw(14) << start_cnn_bias << "\n";
+
+    out << "\nClassification Metrics:\n";
+    print_binary_metrics_header(out);
+    print_binary_metrics_row(out, "coding", result.coding_total);
+    print_binary_metrics_row(out, "intron", result.intron_total);
+
+    out << "\nBoundary Metrics:\n";
+    print_boundary_metrics_header(out);
+    print_boundary_metrics_row(out, "start", result.start_exact, result.start_predicted, result.start_gold);
+    print_boundary_metrics_row(out, "stop", result.stop_exact, result.stop_predicted, result.stop_gold);
+    print_boundary_metrics_row(out, "donor", result.donor_exact, result.donor_predicted, result.donor_gold);
+    print_boundary_metrics_row(out, "acceptor", result.acceptor_exact, result.acceptor_predicted, result.acceptor_gold);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -1491,34 +1537,74 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cout << "\n=== Full Genome Holdout Validation ===\n";
-    cout << fixed << setprecision(4);
-    cout << left << setw(28) << "Metric" << right << setw(14) << "Value" << "\n";
-    cout << left << setw(28) << "Evaluated bases" << right << setw(14) << result.total_bases << "\n";
-    cout << left << setw(28) << "Exact 21-state accuracy" << right << setw(14) << divide(result.exact_matches, result.total_bases) << "\n";
-    cout << left << setw(28) << "Illegal transitions" << right << setw(14) << result.illegal_transitions << "\n";
-    cout << left << setw(28) << "Predicted gene intervals" << right << setw(14) << result.predicted_gene_intervals.size() << "\n";
-    cout << left << setw(28) << "Gold gene intervals" << right << setw(14) << result.gold_gene_intervals.size() << "\n";
-    cout << left << setw(28) << "Intron length cap p95" << right << setw(14) << max_intron_body_length << "\n";
-    cout << left << setw(28) << "Gene start penalty" << right << setw(14) << gene_start_penalty << "\n";
-    cout << left << setw(28) << "CNN donor scale" << right << setw(14) << donor_cnn_scale << "\n";
-    cout << left << setw(28) << "CNN donor bias" << right << setw(14) << donor_cnn_bias << "\n";
-    cout << left << setw(28) << "CNN acceptor scale" << right << setw(14) << acceptor_cnn_scale << "\n";
-    cout << left << setw(28) << "CNN acceptor bias" << right << setw(14) << acceptor_cnn_bias << "\n";
-    cout << left << setw(28) << "CNN start scale" << right << setw(14) << start_cnn_scale << "\n";
-    cout << left << setw(28) << "CNN start bias" << right << setw(14) << start_cnn_bias << "\n";
+    write_validation_report(cout, "Full Genome Holdout Validation", result, max_intron_body_length);
 
-    cout << "\nClassification Metrics:\n";
-    print_binary_metrics_header();
-    print_binary_metrics_row("coding", result.coding_total);
-    print_binary_metrics_row("intron", result.intron_total);
+    if (!results_dir.empty()) {
+        error_code ec;
+        filesystem::create_directories(results_dir, ec);
+        if (ec) {
+            cerr << "Could not create results directory: " << results_dir << " (" << ec.message() << ")\n";
+            return 1;
+        }
 
-    cout << "\nBoundary Metrics:\n";
-    print_boundary_metrics_header();
-    print_boundary_metrics_row("start", result.start_exact, result.start_predicted, result.start_gold);
-    print_boundary_metrics_row("stop", result.stop_exact, result.stop_predicted, result.stop_gold);
-    print_boundary_metrics_row("donor", result.donor_exact, result.donor_predicted, result.donor_gold);
-    print_boundary_metrics_row("acceptor", result.acceptor_exact, result.acceptor_predicted, result.acceptor_gold);
+        // Combined report.
+        const string combined_path = results_dir + "/combined.txt";
+        ofstream combined_file(combined_path);
+        if (!combined_file) {
+            cerr << "Could not open results file: " << combined_path << "\n";
+            return 1;
+        }
+        write_validation_report(
+            combined_file, "Full Genome Holdout Validation (all tests combined)", result, max_intron_body_length);
+        cout << "\nSaved combined results to " << combined_path << "\n";
+
+        // Per-species reports: decode only that species' evaluation ranges. The
+        // CNN scores are already loaded with global offsets, so a range subset
+        // decodes identically to the combined run.
+        for (const auto& dataset : gene_hmm::profile.species) {
+            const string prefix = dataset.name + ":";
+            vector<Chromosome_Range> species_ranges;
+            for (const auto& range : eval_ranges) {
+                if (range.name.rfind(prefix, 0) == 0) {
+                    species_ranges.push_back(range);
+                }
+            }
+            if (species_ranges.empty()) {
+                continue;
+            }
+
+            Validation_Result species_result;
+            try {
+                species_result = decode_validation(
+                    emission_model,
+                    transition_log_probs,
+                    eval_data,
+                    species_ranges,
+                    max_intron_body_length,
+                    true);
+            } catch (const exception& e) {
+                cerr << e.what() << "\n";
+                return 1;
+            }
+
+            string chroms;
+            set<string> seen_chroms;
+            for (const auto& range : species_ranges) {
+                if (seen_chroms.insert(range.name).second) {
+                    if (!chroms.empty()) chroms += ",";
+                    chroms += range.name;
+                }
+            }
+            const string species_path = results_dir + "/" + dataset.name + ".txt";
+            ofstream species_file(species_path);
+            if (!species_file) {
+                cerr << "Could not open results file: " << species_path << "\n";
+                return 1;
+            }
+            write_validation_report(species_file, "Test: " + chroms, species_result, max_intron_body_length);
+            cout << "Saved " << dataset.name << " results to " << species_path << "\n";
+        }
+    }
 
     return 0;
 }
